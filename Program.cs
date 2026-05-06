@@ -1,68 +1,75 @@
-namespace KLCN_API
+using KLCN_API.Extensions;
+using KLCN_API.Filters;
+using KLCN_API.Jobs;
+using KLCN_API.Middleware;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// ================================================================
+// SERVICES
+// ================================================================
+
+// Controllers + ValidationFilter global
+builder.Services.AddControllers(options =>
+    options.Filters.Add<ValidationFilter>()
+);
+
+// Tắt automatic 400 response mặc định của ASP.NET
+// để ValidationFilter của chúng ta xử lý thay thế
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options =>
+    options.SuppressModelStateInvalidFilter = true
+);
+
+builder.Services.AddEndpointsApiExplorer();
+
+// DbContext (SQL Server)
+builder.Services.AddDatabase(builder.Configuration);
+
+// JWT Authentication + Authorization
+builder.Services.AddJwtAuthentication(builder.Configuration);
+
+// CORS
+builder.Services.AddCorsPolicy(builder.Configuration);
+
+// Swagger với Bearer token support
+builder.Services.AddSwaggerWithAuth();
+
+// Application Services & Repositories (điền khi làm Giai đoạn 2+)
+builder.Services.AddApplicationServices();
+builder.Services.AddRepositories();
+
+// Background Jobs
+builder.Services.AddHostedService<ReleaseExpiredSlotsJob>();
+builder.Services.AddHostedService<GenerateDailySlotsJob>();
+
+// ================================================================
+// PIPELINE
+// ================================================================
+
+var app = builder.Build();
+
+// Global exception handler — phải đứng đầu tiên
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+// Swagger — luôn bật (kể cả production để tiện test)
+app.UseSwagger();
+app.UseSwaggerUI(options =>
 {
-    public class Program
-    {
-        public static void Main(string[] args)
-        {
-            var builder = WebApplication.CreateBuilder(args);
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "SportPlus API V1");
+    options.RoutePrefix = "";           // swagger tại root domain
+    options.DisplayRequestDuration();          // hiển thị thời gian response
+    options.DefaultModelsExpandDepth(-1);      // ẩn schema section mặc định
+});
 
-            // ========================
-            // 🔧 SERVICES
-            // ========================
+app.UseHttpsRedirection();
 
-            builder.Services.AddControllers();
+// CORS — phải trước Authentication
+app.UseCors("AllowAll");
 
-            // Swagger
-            builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen(options =>
-            {
-                options.SwaggerDoc("v1", new()
-                {
-                    Title = "KLCN API",
-                    Version = "v1",
-                    Description = "API for KLCN project"
-                });
-            });
+// Auth pipeline — đúng thứ tự: Authentication → Authorization
+app.UseAuthentication();
+app.UseAuthorization();
 
-            // (Optional) CORS nếu bạn có frontend
-            builder.Services.AddCors(options =>
-            {
-                options.AddPolicy("AllowAll", policy =>
-                {
-                    policy
-                        .AllowAnyOrigin()
-                        .AllowAnyMethod()
-                        .AllowAnyHeader();
-                });
-            });
+app.MapControllers();
 
-            var app = builder.Build();
-
-            // ========================
-            // 🚀 PIPELINE
-            // ========================
-
-            // ⚠️ Luôn bật Swagger (Production vẫn dùng được)
-            app.UseSwagger();
-            app.UseSwaggerUI(options =>
-            {
-                options.SwaggerEndpoint("/swagger/v1/swagger.json", "KLCN API V1");
-
-                // 👉 Mở domain là thấy Swagger luôn
-                options.RoutePrefix = "";
-            });
-
-            // HTTPS (có thể tắt nếu hosting lỗi)
-            app.UseHttpsRedirection();
-
-            // CORS
-            app.UseCors("AllowAll");
-
-            app.UseAuthorization();
-
-            app.MapControllers();
-
-            app.Run();
-        }
-    }
-}
+app.Run();

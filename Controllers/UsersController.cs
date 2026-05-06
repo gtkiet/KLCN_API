@@ -1,0 +1,106 @@
+﻿using KLCN_API.Filters;
+using KLCN_API.Helpers;
+using KLCN_API.Middleware;
+using KLCN_API.Models.DTOs.Request;
+using KLCN_API.Models.DTOs.Response;
+using KLCN_API.Models.Enums;
+using KLCN_API.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace KLCN_API.Controllers;
+
+[ApiController]
+[Route("api/users")]
+[Authorize]
+public class UsersController : ControllerBase
+{
+    private readonly IUserService _userService;
+
+    public UsersController(IUserService userService)
+    {
+        _userService = userService;
+    }
+
+    /// <summary>Lấy thông tin bản thân.</summary>
+    [HttpGet("me")]
+    [ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), 200)]
+    public async Task<IActionResult> GetMe()
+    {
+        var userId = User.GetUserId();
+        var result = await _userService.GetByIdAsync(userId);
+        return Ok(ApiResponse<UserDetailResponse>.Ok(result));
+    }
+
+    /// <summary>Cập nhật profile bản thân.</summary>
+    [HttpPut("me")]
+    [ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
+    public async Task<IActionResult> UpdateMe([FromBody] UpdateProfileRequest request)
+    {
+        var userId = User.GetUserId();
+        var result = await _userService.UpdateProfileAsync(userId, request);
+        return Ok(ApiResponse<UserDetailResponse>.Ok(result, "Cập nhật thông tin thành công."));
+    }
+
+    /// <summary>Lấy danh sách user — Admin và Staff.</summary>
+    [HttpGet]
+    [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
+    [ProducesResponseType(typeof(ApiResponse<PagedResponse<UserResponse>>), 200)]
+    public async Task<IActionResult> GetUsers([FromQuery] GetUsersRequest request)
+    {
+        var result = await _userService.GetUsersAsync(request);
+        return Ok(ApiResponse<PagedResponse<UserResponse>>.Ok(result));
+    }
+
+    /// <summary>Lấy chi tiết 1 user — Admin và Staff.</summary>
+    [HttpGet("{userId:int}")]
+    [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
+    [ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 404)]
+    public async Task<IActionResult> GetById(int userId)
+    {
+        var result = await _userService.GetByIdAsync(userId);
+        return Ok(ApiResponse<UserDetailResponse>.Ok(result));
+    }
+
+    /// <summary>Khóa tài khoản user — chỉ Admin.</summary>
+    [HttpPatch("{userId:int}/lock")]
+    [AuthorizeRoles(RoleEnum.Admin)]
+    [ProducesResponseType(typeof(ApiResponse), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 404)]
+    public async Task<IActionResult> Lock(int userId)
+    {
+        // Admin không được tự khóa chính mình
+        if (userId == User.GetUserId())
+            throw new BusinessException("Không thể khóa tài khoản của chính mình.", 400);
+
+        await _userService.LockUserAsync(userId);
+        return Ok(ApiResponse.Ok("Khóa tài khoản thành công."));
+    }
+
+    /// <summary>Mở khóa tài khoản user — chỉ Admin.</summary>
+    [HttpPatch("{userId:int}/unlock")]
+    [AuthorizeRoles(RoleEnum.Admin)]
+    [ProducesResponseType(typeof(ApiResponse), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 404)]
+    public async Task<IActionResult> Unlock(int userId)
+    {
+        await _userService.UnlockUserAsync(userId);
+        return Ok(ApiResponse.Ok("Mở khóa tài khoản thành công."));
+    }
+
+    /// <summary>Xóa mềm user — chỉ Admin.</summary>
+    [HttpDelete("{userId:int}")]
+    [AuthorizeRoles(RoleEnum.Admin)]
+    [ProducesResponseType(typeof(ApiResponse), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 404)]
+    public async Task<IActionResult> Delete(int userId)
+    {
+        if (userId == User.GetUserId())
+            throw new BusinessException("Không thể xóa tài khoản của chính mình.", 400);
+
+        await _userService.DeleteUserAsync(userId);
+        return Ok(ApiResponse.Ok("Xóa tài khoản thành công."));
+    }
+}
