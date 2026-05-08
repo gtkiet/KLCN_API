@@ -1,7 +1,5 @@
-using System.Text;
 using KLCN_API.Configurations;
 using KLCN_API.Data;
-using KLCN_API.Filters;
 using KLCN_API.Helpers;
 using KLCN_API.Repositories;
 using KLCN_API.Repositories.Interfaces;
@@ -11,28 +9,50 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using System.Text;
 
 namespace KLCN_API.Extensions;
 
 public static class ServiceCollectionExtensions
 {
+    // ============================================================
+    // DATABASE
+    // ============================================================
+
     public static IServiceCollection AddDatabase(
-        this IServiceCollection services, IConfiguration config)
+        this IServiceCollection services,
+        IConfiguration config)
     {
         services.AddDbContext<SportPlusDbContext>(options =>
             options.UseSqlServer(
                 config.GetConnectionString("DefaultConnection"),
-                sql => sql.CommandTimeout(30)
-            )
-        );
+                sql => sql.CommandTimeout(30)));
+
         return services;
     }
 
+    // ============================================================
+    // JWT AUTHENTICATION
+    // ============================================================
+
     public static IServiceCollection AddJwtAuthentication(
-        this IServiceCollection services, IConfiguration config)
+        this IServiceCollection services,
+        IConfiguration config)
     {
-        var jwtSettings = config.GetSection("JwtSettings").Get<JwtSettings>()
-                          ?? throw new InvalidOperationException("JwtSettings chua duoc cau hinh.");
+        var jwtSection = config.GetSection("JwtSettings");
+
+        if (!jwtSection.Exists())
+            throw new InvalidOperationException(
+                "Khong tim thay JwtSettings trong appsettings.");
+
+        var jwtSettings =
+            jwtSection.Get<JwtSettings>()
+            ?? throw new InvalidOperationException(
+                "Khong bind duoc JwtSettings.");
+
+        if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey))
+            throw new InvalidOperationException(
+                "JwtSettings:SecretKey khong duoc de trong.");
 
         services.AddSingleton(jwtSettings);
         services.AddSingleton<JwtHelper>();
@@ -42,142 +62,204 @@ public static class ServiceCollectionExtensions
         services
             .AddAuthentication(options =>
             {
-                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultAuthenticateScheme =
+                    JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme =
+                    JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultScheme =
+                    JwtBearerDefaults.AuthenticationScheme;
             })
             .AddJwtBearer(options =>
             {
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateIssuerSigningKey = true,
-                    ValidateLifetime = true,
-                    ClockSkew = TimeSpan.Zero,
-                    ValidIssuer = jwtSettings.Issuer,
-                    ValidAudience = jwtSettings.Audience,
-                    IssuerSigningKey = new SymmetricSecurityKey(key)
-                };
+                options.RequireHttpsMetadata = false;
+                options.SaveToken = true;
+
+                options.TokenValidationParameters =
+                    new TokenValidationParameters
+                    {
+                        ValidateIssuerSigningKey = true,
+                        IssuerSigningKey =
+                            new SymmetricSecurityKey(key),
+                        ValidateIssuer = true,
+                        ValidIssuer = jwtSettings.Issuer,
+                        ValidateAudience = true,
+                        ValidAudience = jwtSettings.Audience,
+                        ValidateLifetime = true,
+                        ClockSkew = TimeSpan.Zero
+                    };
 
                 options.Events = new JwtBearerEvents
                 {
-                    OnChallenge = async ctx =>
+                    OnChallenge = async context =>
                     {
-                        ctx.HandleResponse();
-                        ctx.Response.StatusCode = 401;
-                        ctx.Response.ContentType = "application/json";
-                        await ctx.Response.WriteAsync(
-                            "{\"success\":false,\"message\":\"Ban chua dang nhap hoac token khong hop le.\"}");
+                        context.HandleResponse();
+                        context.Response.StatusCode =
+                            StatusCodes.Status401Unauthorized;
+                        context.Response.ContentType =
+                            "application/json";
+
+                        await context.Response.WriteAsync("""
+                            {
+                                "success": false,
+                                "message": "Bạn chưa đăng nhập hoặc token không hợp lệ."
+                            }
+                            """);
                     },
-                    OnForbidden = async ctx =>
+
+                    OnForbidden = async context =>
                     {
-                        ctx.Response.StatusCode = 403;
-                        ctx.Response.ContentType = "application/json";
-                        await ctx.Response.WriteAsync(
-                            "{\"success\":false,\"message\":\"Ban khong co quyen thuc hien thao tac nay.\"}");
+                        context.Response.StatusCode =
+                            StatusCodes.Status403Forbidden;
+                        context.Response.ContentType =
+                            "application/json";
+
+                        await context.Response.WriteAsync("""
+                            {
+                                "success": false,
+                                "message": "Bạn không có quyền thực hiện thao tác này."
+                            }
+                            """);
                     }
                 };
             });
 
         services.AddAuthorization(options =>
         {
-            options.AddPolicy("AdminOnly", p => p.RequireRole("Admin"));
-            options.AddPolicy("StaffOrAdmin", p => p.RequireRole("Admin", "Staff"));
-            options.AddPolicy("AnyAuth", p => p.RequireAuthenticatedUser());
+            options.AddPolicy(
+                "AdminOnly",
+                policy => policy.RequireRole("Admin"));
+
+            options.AddPolicy(
+                "StaffOrAdmin",
+                policy => policy.RequireRole("Admin", "Staff"));
+
+            options.AddPolicy(
+                "AnyAuth",
+                policy => policy.RequireAuthenticatedUser());
         });
 
         return services;
     }
 
+    // ============================================================
+    // CORS
+    // ============================================================
+
     public static IServiceCollection AddCorsPolicy(
-        this IServiceCollection services, IConfiguration config)
+        this IServiceCollection services,
+        IConfiguration config)
     {
-        var corsSettings = config.GetSection("CorsSettings").Get<CorsSettings>()
-                           ?? new CorsSettings();
+        var corsSettings =
+            config.GetSection("CorsSettings")
+                .Get<CorsSettings>()
+            ?? new CorsSettings();
 
         services.AddCors(options =>
         {
             options.AddPolicy("AllowConfigured", policy =>
             {
-                if (corsSettings.AllowedOrigins.Count > 0)
-                    policy.WithOrigins(corsSettings.AllowedOrigins.ToArray());
+                if (corsSettings.AllowedOrigins.Any())
+                    policy.WithOrigins(
+                        corsSettings.AllowedOrigins.ToArray());
                 else
                     policy.AllowAnyOrigin();
 
-                policy.AllowAnyMethod().AllowAnyHeader();
+                policy.AllowAnyHeader().AllowAnyMethod();
             });
 
             options.AddPolicy("AllowAll", policy =>
-                policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+                policy
+                    .AllowAnyOrigin()
+                    .AllowAnyHeader()
+                    .AllowAnyMethod());
         });
 
         return services;
     }
 
-    public static IServiceCollection AddSwaggerWithAuth(this IServiceCollection services)
+    // ============================================================
+    // SWAGGER + JWT
+    // ============================================================
+
+    public static IServiceCollection AddSwaggerWithAuth(
+        this IServiceCollection services)
     {
-        services.AddSwaggerGen(c =>
+        services.AddSwaggerGen(options =>
         {
-            c.SwaggerDoc("v1", new OpenApiInfo
+            // ── Swagger doc ──────────────────────────────────────
+            options.SwaggerDoc("v1", new OpenApiInfo
             {
                 Title = "SportPlus API",
                 Version = "v1",
-                Description = "He thong quan ly san bong Sport Plus"
+                Description = "Hệ thống quản lý sân bóng SportPlus API"
             });
 
-            c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            // ── XML comments ─────────────────────────────────────
+            var xmlPath = Path.Combine(
+                AppContext.BaseDirectory,
+                $"{System.Reflection.Assembly
+                    .GetExecutingAssembly()
+                    .GetName()
+                    .Name}.xml");
+
+            if (File.Exists(xmlPath))
+                options.IncludeXmlComments(xmlPath);
+
+            // ── Security definition ──────────────────────────────
+            // Tạo scheme "Bearer" — xuất hiện trong nút Authorize
+            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Name = "Authorization",
-                Type = SecuritySchemeType.ApiKey,
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",       // chữ thường
+                BearerFormat = "JWT",
                 In = ParameterLocation.Header,
-                Description = "Nhap: Bearer {token}"
+                Description =
+                    "Nhập JWT access token. " +
+                    "Swagger tự thêm prefix 'Bearer ' cho bạn."
             });
 
-            // Bỏ AddSecurityRequirement global — để AuthorizeOperationFilter xử lý
-            c.OperationFilter<AuthorizeOperationFilter>();
+            // ── Global security requirement ──────────────────────
+            // Dùng lambda để lấy hostDocument — bắt buộc trong OpenApi v2
+            // Đây là cách duy nhất đúng với Swashbuckle 10.x
+            options.AddSecurityRequirement(document =>
+                new OpenApiSecurityRequirement
+                {
+                    [new OpenApiSecuritySchemeReference("Bearer", document)] =
+                        new List<string>()
+                });
 
-            c.TagActionsBy(api =>
-                new[] { api.GroupName ?? api.ActionDescriptor.RouteValues["controller"]! });
+            // ── Schema IDs ───────────────────────────────────────
+            options.CustomSchemaIds(type =>
+                type.FullName?.Replace("+", "."));
         });
 
         return services;
     }
 
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    // ============================================================
+    // SERVICES
+    // ============================================================
+
+    public static IServiceCollection AddApplicationServices(
+        this IServiceCollection services)
     {
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
-        // Giai doan 3+:
-        // services.AddScoped<IFieldService, FieldService>();
-        // services.AddScoped<IBookingService, BookingService>();
-        // services.AddScoped<IPaymentService, PaymentService>();
-        // services.AddScoped<IPromotionService, PromotionService>();
-        // services.AddScoped<IServiceService, ServiceService>();
-        // services.AddScoped<IInventoryService, InventoryService>();
-        // services.AddScoped<IIncidentService, IncidentService>();
-        // services.AddScoped<IReviewService, ReviewService>();
-        // services.AddScoped<INotificationService, NotificationService>();
-        // services.AddScoped<IDashboardService, DashboardService>();
-        // services.AddScoped<ISystemConfigService, SystemConfigService>();
+
         return services;
     }
 
-    public static IServiceCollection AddRepositories(this IServiceCollection services)
+    // ============================================================
+    // REPOSITORIES
+    // ============================================================
+
+    public static IServiceCollection AddRepositories(
+        this IServiceCollection services)
     {
         services.AddScoped<IAuthRepository, AuthRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
-        // Giai doan 3+:
-        // services.AddScoped<IFieldRepository, FieldRepository>();
-        // services.AddScoped<IFieldSlotRepository, FieldSlotRepository>();
-        // services.AddScoped<IBookingRepository, BookingRepository>();
-        // services.AddScoped<IPaymentRepository, PaymentRepository>();
-        // services.AddScoped<IDepositRepository, DepositRepository>();
-        // services.AddScoped<IPromotionRepository, PromotionRepository>();
-        // services.AddScoped<IProductRepository, ProductRepository>();
-        // services.AddScoped<IIncidentRepository, IncidentRepository>();
-        // services.AddScoped<IReviewRepository, ReviewRepository>();
-        // services.AddScoped<INotificationRepository, NotificationRepository>();
-        // services.AddScoped<IDashboardRepository, DashboardRepository>();
+
         return services;
     }
 }
