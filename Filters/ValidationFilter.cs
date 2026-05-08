@@ -1,32 +1,41 @@
-﻿using KLCN_API.Models.DTOs.Response;
+﻿using KLCN_API.Middleware;
+using KLCN_API.Models.DTOs.Response;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace KLCN_API.Filters;
 
-public class ValidationFilter : IActionFilter
+public class ValidationFilter : IAsyncActionFilter
 {
-    public void OnActionExecuting(
-        ActionExecutingContext context)
+    public async Task OnActionExecutionAsync(
+        ActionExecutingContext context,
+        ActionExecutionDelegate next)
     {
-        if (context.ModelState.IsValid)
+        // ── Validation ───────────────────────────────────────────
+        if (!context.ModelState.IsValid)
+        {
+            var errors = context.ModelState
+                .Where(x => x.Value?.Errors.Count > 0)
+                .SelectMany(x => x.Value!.Errors.Select(e => e.ErrorMessage))
+                .ToList();
+
+            context.Result = new BadRequestObjectResult(
+                ApiResponse.Fail("Dữ liệu không hợp lệ.", errors));
+
             return;
+        }
 
-        var errors = context.ModelState
-            .Where(x => x.Value?.Errors.Count > 0)
-            .SelectMany(x =>
-                x.Value!.Errors.Select(e => e.ErrorMessage))
-            .ToList();
+        // ── Execute action & catch exception ─────────────────────
+        var executed = await next();
 
-        context.Result =
-            new BadRequestObjectResult(
-                ApiResponse.Fail(
-                    "Du lieu khong hop le.",
-                    errors));
-    }
+        if (executed.Exception is BusinessException ex && !executed.ExceptionHandled)
+        {
+            executed.Result = new ObjectResult(ApiResponse.Fail(ex.Message))
+            {
+                StatusCode = ex.StatusCode
+            };
 
-    public void OnActionExecuted(
-        ActionExecutedContext context)
-    {
+            executed.ExceptionHandled = true;
+        }
     }
 }

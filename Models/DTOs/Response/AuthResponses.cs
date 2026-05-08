@@ -1,4 +1,6 @@
-﻿namespace KLCN_API.Models.DTOs.Response;
+﻿// Models/DTOs/Response/AuthResponse.cs
+
+namespace KLCN_API.Models.DTOs.Response;
 
 public class LoginResponse
 {

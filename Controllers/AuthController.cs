@@ -2,7 +2,6 @@
 using KLCN_API.Helpers;
 using KLCN_API.Models.DTOs.Request;
 using KLCN_API.Models.DTOs.Response;
-using KLCN_API.Models.Enums;
 using KLCN_API.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,10 +14,7 @@ public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
 
-    public AuthController(IAuthService authService)
-    {
-        _authService = authService;
-    }
+    public AuthController(IAuthService authService) => _authService = authService;
 
     /// <summary>Đăng ký tài khoản khách hàng.</summary>
     [HttpPost("register")]
@@ -32,23 +28,11 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<LoginResponse>.Ok(result, "Đăng ký thành công."));
     }
 
-    /// <summary>Tạo tài khoản nhân viên — chỉ Admin.</summary>
-    [HttpPost("staff")]
-    [AuthorizeRoles(RoleEnum.Admin)]
-    [ProducesResponseType(typeof(ApiResponse<LoginResponse>), 200)]
-    [ProducesResponseType(typeof(ApiResponse), 400)]
-    [ProducesResponseType(typeof(ApiResponse), 409)]
-    public async Task<IActionResult> CreateStaff([FromBody] CreateStaffRequest request)
-    {
-        var result = await _authService.CreateStaffAsync(request);
-        return Ok(ApiResponse<LoginResponse>.Ok(result, "Tạo tài khoản nhân viên thành công."));
-    }
-
     /// <summary>Đăng nhập.</summary>
     [HttpPost("login")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<LoginResponse>), 200)]
-    [ProducesResponseType(typeof(ApiResponse), 401)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var result = await _authService.LoginAsync(request);
@@ -66,25 +50,14 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<TokenResponse>.Ok(result, "Làm mới token thành công."));
     }
 
-    /// <summary>Đăng xuất — thu hồi refresh token.</summary>
+    /// <summary>Đăng xuất — thu hồi toàn bộ refresh token.</summary>
     [HttpPost("logout")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponse), 200)]
-    public async Task<IActionResult> Logout([FromBody] LogoutRequest request)
-    {
-        await _authService.LogoutAsync(request.RefreshToken);
-        return Ok(ApiResponse.Ok("Đăng xuất thành công."));
-    }
-
-    /// <summary>Đổi mật khẩu — user tự đổi.</summary>
-    [HttpPut("change-password")]
-    [Authorize]
-    [ProducesResponseType(typeof(ApiResponse), 200)]
-    [ProducesResponseType(typeof(ApiResponse), 400)]
-    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    public async Task<IActionResult> Logout()
     {
         var userId = User.GetUserId();
-        await _authService.ChangePasswordAsync(userId, request);
-        return Ok(ApiResponse.Ok("Đổi mật khẩu thành công. Vui lòng đăng nhập lại."));
+        await _authService.LogoutAsync(userId);
+        return Ok(ApiResponse.Ok("Đăng xuất thành công."));
     }
 }

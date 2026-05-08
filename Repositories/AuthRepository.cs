@@ -9,10 +9,7 @@ public class AuthRepository : IAuthRepository
 {
     private readonly SportPlusDbContext _ctx;
 
-    public AuthRepository(SportPlusDbContext ctx)
-    {
-        _ctx = ctx;
-    }
+    public AuthRepository(SportPlusDbContext ctx) => _ctx = ctx;
 
     public async Task<User?> GetByEmailAsync(string email)
         => await _ctx.Users
@@ -36,7 +33,6 @@ public class AuthRepository : IAuthRepository
         await _ctx.Profiles.AddAsync(profile);
         await _ctx.SaveChangesAsync();
 
-        // Load navigation properties để trả về đầy đủ
         await _ctx.Entry(user).Reference(u => u.Role).LoadAsync();
         await _ctx.Entry(user).Reference(u => u.Status).LoadAsync();
         user.Profile = profile;
@@ -69,22 +65,7 @@ public class AuthRepository : IAuthRepository
     }
 
     public async Task RevokeAllRefreshTokensAsync(int userId)
-    {
-        await _ctx.RefreshTokens
+        => await _ctx.RefreshTokens
             .Where(rt => rt.UserId == userId && !rt.IsRevoked)
             .ExecuteUpdateAsync(s => s.SetProperty(rt => rt.IsRevoked, true));
-    }
-
-    public async Task<string?> GetPasswordHashAsync(int userId)
-        => await _ctx.Users
-            .Where(u => u.UserId == userId)
-            .Select(u => u.PasswordHash)
-            .FirstOrDefaultAsync();
-
-    public async Task UpdatePasswordAsync(int userId, string newPasswordHash)
-        => await _ctx.Users
-            .Where(u => u.UserId == userId)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(u => u.PasswordHash, newPasswordHash)
-                .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
 }

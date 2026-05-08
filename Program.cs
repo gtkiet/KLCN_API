@@ -11,7 +11,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers(options =>
 {
-    options.Filters.Add<ValidationFilter>();
+    options.Filters.Add<ValidationFilter>();  // giữ nguyên
+    options.Filters.Add<ExceptionFilter>();   // thêm dòng này
 });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -28,7 +29,7 @@ builder.Services.AddApplicationServices();
 
 builder.Services.AddRepositories();
 
-builder.Services.AddScoped<ValidationFilter>();
+//builder.Services.AddScoped<ValidationFilter>();
 
 // Background jobs
 builder.Services.AddHostedService<ReleaseExpiredSlotsJob>();

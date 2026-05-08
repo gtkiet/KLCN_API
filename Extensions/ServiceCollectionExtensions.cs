@@ -1,6 +1,8 @@
+using System.Text.Json;
 using KLCN_API.Configurations;
 using KLCN_API.Data;
 using KLCN_API.Helpers;
+using KLCN_API.Models.DTOs.Response;
 using KLCN_API.Repositories;
 using KLCN_API.Repositories.Interfaces;
 using KLCN_API.Services;
@@ -59,82 +61,73 @@ public static class ServiceCollectionExtensions
 
         var key = Encoding.UTF8.GetBytes(jwtSettings.SecretKey);
 
+        var jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
         services
             .AddAuthentication(options =>
             {
-                options.DefaultAuthenticateScheme =
-                    JwtBearerDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme =
-                    JwtBearerDefaults.AuthenticationScheme;
-                options.DefaultScheme =
-                    JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
             })
             .AddJwtBearer(options =>
             {
                 options.RequireHttpsMetadata = false;
                 options.SaveToken = true;
 
-                options.TokenValidationParameters =
-                    new TokenValidationParameters
-                    {
-                        ValidateIssuerSigningKey = true,
-                        IssuerSigningKey =
-                            new SymmetricSecurityKey(key),
-                        ValidateIssuer = true,
-                        ValidIssuer = jwtSettings.Issuer,
-                        ValidateAudience = true,
-                        ValidAudience = jwtSettings.Audience,
-                        ValidateLifetime = true,
-                        ClockSkew = TimeSpan.Zero
-                    };
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ValidateIssuer = true,
+                    ValidIssuer = jwtSettings.Issuer,
+                    ValidateAudience = true,
+                    ValidAudience = jwtSettings.Audience,
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero
+                };
 
                 options.Events = new JwtBearerEvents
                 {
                     OnChallenge = async context =>
                     {
                         context.HandleResponse();
-                        context.Response.StatusCode =
-                            StatusCodes.Status401Unauthorized;
-                        context.Response.ContentType =
-                            "application/json";
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        context.Response.ContentType = "application/json";
 
-                        await context.Response.WriteAsync("""
-                            {
-                                "success": false,
-                                "message": "Bạn chưa đăng nhập hoặc token không hợp lệ."
-                            }
-                            """);
+                        var response = ApiResponse.Fail(
+                            "Bạn chưa đăng nhập hoặc token không hợp lệ.");
+
+                        await context.Response.WriteAsync(
+                            JsonSerializer.Serialize(response, jsonOptions));
                     },
 
                     OnForbidden = async context =>
                     {
-                        context.Response.StatusCode =
-                            StatusCodes.Status403Forbidden;
-                        context.Response.ContentType =
-                            "application/json";
+                        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        context.Response.ContentType = "application/json";
 
-                        await context.Response.WriteAsync("""
-                            {
-                                "success": false,
-                                "message": "Bạn không có quyền thực hiện thao tác này."
-                            }
-                            """);
+                        var response = ApiResponse.Fail(
+                            "Bạn không có quyền thực hiện thao tác này.");
+
+                        await context.Response.WriteAsync(
+                            JsonSerializer.Serialize(response, jsonOptions));
                     }
                 };
             });
 
         services.AddAuthorization(options =>
         {
-            options.AddPolicy(
-                "AdminOnly",
+            options.AddPolicy("AdminOnly",
                 policy => policy.RequireRole("Admin"));
 
-            options.AddPolicy(
-                "StaffOrAdmin",
+            options.AddPolicy("StaffOrAdmin",
                 policy => policy.RequireRole("Admin", "Staff"));
 
-            options.AddPolicy(
-                "AnyAuth",
+            options.AddPolicy("AnyAuth",
                 policy => policy.RequireAuthenticatedUser());
         });
 
@@ -150,8 +143,7 @@ public static class ServiceCollectionExtensions
         IConfiguration config)
     {
         var corsSettings =
-            config.GetSection("CorsSettings")
-                .Get<CorsSettings>()
+            config.GetSection("CorsSettings").Get<CorsSettings>()
             ?? new CorsSettings();
 
         services.AddCors(options =>
@@ -159,8 +151,7 @@ public static class ServiceCollectionExtensions
             options.AddPolicy("AllowConfigured", policy =>
             {
                 if (corsSettings.AllowedOrigins.Any())
-                    policy.WithOrigins(
-                        corsSettings.AllowedOrigins.ToArray());
+                    policy.WithOrigins(corsSettings.AllowedOrigins.ToArray());
                 else
                     policy.AllowAnyOrigin();
 
@@ -168,10 +159,7 @@ public static class ServiceCollectionExtensions
             });
 
             options.AddPolicy("AllowAll", policy =>
-                policy
-                    .AllowAnyOrigin()
-                    .AllowAnyHeader()
-                    .AllowAnyMethod());
+                policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
         });
 
         return services;
@@ -186,7 +174,6 @@ public static class ServiceCollectionExtensions
     {
         services.AddSwaggerGen(options =>
         {
-            // ── Swagger doc ──────────────────────────────────────
             options.SwaggerDoc("v1", new OpenApiInfo
             {
                 Title = "SportPlus API",
@@ -194,34 +181,23 @@ public static class ServiceCollectionExtensions
                 Description = "Hệ thống quản lý sân bóng SportPlus API"
             });
 
-            // ── XML comments ─────────────────────────────────────
             var xmlPath = Path.Combine(
                 AppContext.BaseDirectory,
-                $"{System.Reflection.Assembly
-                    .GetExecutingAssembly()
-                    .GetName()
-                    .Name}.xml");
+                $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml");
 
             if (File.Exists(xmlPath))
                 options.IncludeXmlComments(xmlPath);
 
-            // ── Security definition ──────────────────────────────
-            // Tạo scheme "Bearer" — xuất hiện trong nút Authorize
             options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Name = "Authorization",
                 Type = SecuritySchemeType.Http,
-                Scheme = "bearer",       // chữ thường
+                Scheme = "bearer",
                 BearerFormat = "JWT",
                 In = ParameterLocation.Header,
-                Description =
-                    "Nhập JWT access token. " +
-                    "Swagger tự thêm prefix 'Bearer ' cho bạn."
+                Description = "Nhập JWT access token. Swagger tự thêm prefix 'Bearer ' cho bạn."
             });
 
-            // ── Global security requirement ──────────────────────
-            // Dùng lambda để lấy hostDocument — bắt buộc trong OpenApi v2
-            // Đây là cách duy nhất đúng với Swashbuckle 10.x
             options.AddSecurityRequirement(document =>
                 new OpenApiSecurityRequirement
                 {
@@ -229,9 +205,7 @@ public static class ServiceCollectionExtensions
                         new List<string>()
                 });
 
-            // ── Schema IDs ───────────────────────────────────────
-            options.CustomSchemaIds(type =>
-                type.FullName?.Replace("+", "."));
+            options.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
         });
 
         return services;
