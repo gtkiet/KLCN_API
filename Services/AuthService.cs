@@ -94,6 +94,23 @@ public class AuthService : IAuthService
     public async Task LogoutAsync(int userId)
         => await _authRepo.RevokeAllRefreshTokensAsync(userId);
 
+    // ── Change Password ──────────────────────────────────────────
+
+    public async Task ChangePasswordAsync(int userId, ChangePasswordRequest request)
+    {
+        var currentHash = await _authRepo.GetPasswordHashAsync(userId)
+            ?? throw new NotFoundException("Người dùng", userId);
+
+        if (!PasswordHelper.VerifyPassword(request.CurrentPassword, currentHash))
+            throw new BusinessException("Mật khẩu hiện tại không chính xác.", 400);
+
+        var newHash = PasswordHelper.HashPassword(request.NewPassword);
+        await _authRepo.UpdatePasswordAsync(userId, newHash);
+
+        // Thu hồi toàn bộ refresh token → buộc đăng nhập lại trên tất cả thiết bị
+        await _authRepo.RevokeAllRefreshTokensAsync(userId);
+    }
+
     // ── Private helpers ──────────────────────────────────────────
 
     private async Task<string> IssueRefreshTokenAsync(int userId)

@@ -1,7 +1,6 @@
 ﻿// ============================================================
 // Configurations/JwtSettings.cs
 // ============================================================
-// POCO để bind từ appsettings.json > JwtSettings
 
 namespace KLCN_API.Configurations;
 

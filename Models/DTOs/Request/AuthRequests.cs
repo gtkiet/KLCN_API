@@ -44,3 +44,18 @@ public class RefreshTokenRequest
     [Required(ErrorMessage = "Refresh token không được để trống.")]
     public string RefreshToken { get; set; } = string.Empty;
 }
+
+public class ChangePasswordRequest
+{
+    [Required(ErrorMessage = "Mật khẩu hiện tại không được để trống.")]
+    public string CurrentPassword { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Mật khẩu mới không được để trống.")]
+    [MinLength(6, ErrorMessage = "Mật khẩu mới tối thiểu 6 ký tự.")]
+    [MaxLength(100)]
+    public string NewPassword { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Xác nhận mật khẩu không được để trống.")]
+    [Compare(nameof(NewPassword), ErrorMessage = "Mật khẩu xác nhận không khớp.")]
+    public string ConfirmPassword { get; set; } = string.Empty;
+}

@@ -68,4 +68,17 @@ public class AuthRepository : IAuthRepository
         => await _ctx.RefreshTokens
             .Where(rt => rt.UserId == userId && !rt.IsRevoked)
             .ExecuteUpdateAsync(s => s.SetProperty(rt => rt.IsRevoked, true));
+
+    public async Task<string?> GetPasswordHashAsync(int userId)
+        => await _ctx.Users
+            .Where(u => u.UserId == userId)
+            .Select(u => u.PasswordHash)
+            .FirstOrDefaultAsync();
+
+    public async Task UpdatePasswordAsync(int userId, string newPasswordHash)
+        => await _ctx.Users
+            .Where(u => u.UserId == userId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.PasswordHash, newPasswordHash)
+                .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
 }

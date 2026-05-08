@@ -11,7 +11,6 @@ public class ValidationFilter : IAsyncActionFilter
         ActionExecutingContext context,
         ActionExecutionDelegate next)
     {
-        // ── Validation ───────────────────────────────────────────
         if (!context.ModelState.IsValid)
         {
             var errors = context.ModelState
@@ -25,17 +24,6 @@ public class ValidationFilter : IAsyncActionFilter
             return;
         }
 
-        // ── Execute action & catch exception ─────────────────────
-        var executed = await next();
-
-        if (executed.Exception is BusinessException ex && !executed.ExceptionHandled)
-        {
-            executed.Result = new ObjectResult(ApiResponse.Fail(ex.Message))
-            {
-                StatusCode = ex.StatusCode
-            };
-
-            executed.ExceptionHandled = true;
-        }
+        await next();
     }
 }

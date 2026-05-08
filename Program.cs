@@ -5,14 +5,10 @@ using KLCN_API.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ======================================================
-// SERVICES
-// ======================================================
-
 builder.Services.AddControllers(options =>
 {
-    options.Filters.Add<ValidationFilter>();  // giữ nguyên
-    options.Filters.Add<ExceptionFilter>();   // thêm dòng này
+    options.Filters.Add<ValidationFilter>();
+    //options.Filters.Add<ExceptionFilter>();
 });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -29,21 +25,10 @@ builder.Services.AddApplicationServices();
 
 builder.Services.AddRepositories();
 
-//builder.Services.AddScoped<ValidationFilter>();
-
-// Background jobs
 builder.Services.AddHostedService<ReleaseExpiredSlotsJob>();
 builder.Services.AddHostedService<GenerateDailySlotsJob>();
 
-// ======================================================
-// BUILD
-// ======================================================
-
 var app = builder.Build();
-
-// ======================================================
-// MIDDLEWARE — THỨ TỰ BẮT BUỘC
-// ======================================================
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
@@ -59,7 +44,6 @@ if (app.Environment.IsDevelopment())
 
         options.RoutePrefix = "";
 
-        // Giữ token sau khi F5 trang
         options.EnablePersistAuthorization();
     });
 }
@@ -68,7 +52,6 @@ app.UseHttpsRedirection();
 
 app.UseCors("AllowConfigured");
 
-// Authentication PHẢI trước Authorization
 app.UseAuthentication();
 
 app.UseAuthorization();
