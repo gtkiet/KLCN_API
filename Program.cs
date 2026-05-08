@@ -2,13 +2,13 @@ using KLCN_API.Extensions;
 using KLCN_API.Filters;
 using KLCN_API.Jobs;
 using KLCN_API.Middleware;
+using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers(options =>
 {
     options.Filters.Add<ValidationFilter>();
-    //options.Filters.Add<ExceptionFilter>();
 });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -32,23 +32,49 @@ var app = builder.Build();
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+
+app.UseSwaggerUI(options =>
 {
-    app.UseSwagger();
+    options.SwaggerEndpoint(
+        "/swagger/v1/swagger.json",
+        "SportPlus API V1");
 
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint(
-            "/swagger/v1/swagger.json",
-            "SportPlus API V1");
+    options.RoutePrefix = "";
 
-        options.RoutePrefix = "";
-
-        options.EnablePersistAuthorization();
-    });
-}
+    options.EnablePersistAuthorization();
+});
 
 app.UseHttpsRedirection();
+
+//var imagePath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads");
+
+//if (!Directory.Exists(imagePath))
+//{
+//    Directory.CreateDirectory(imagePath);
+//}
+
+//app.UseStaticFiles(new StaticFileOptions
+//{
+//    FileProvider = new PhysicalFileProvider(imagePath),
+//    RequestPath = "/Uploads"
+//});
+var uploadPath = Path.Combine(
+    Directory.GetParent(Directory.GetCurrentDirectory())!.FullName,
+    "Uploads");
+
+if (!Directory.Exists(uploadPath))
+{
+    Directory.CreateDirectory(uploadPath);
+}
+
+app.UseStaticFiles();
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(uploadPath),
+    RequestPath = "/Uploads"
+});
 
 app.UseCors("AllowConfigured");
 

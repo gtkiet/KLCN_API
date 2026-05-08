@@ -96,14 +96,14 @@ Tôi muốn implement AuthController + AuthService + AuthRepository.
 - [x] ExceptionHandlingMiddleware
 - [x] ValidationFilter + AuthorizeRolesAttribute
 - [x] ServiceCollectionExtensions (AddDatabase, AddJwtAuthentication, AddCors, AddSwagger)
-- [ ] JwtHelper + PasswordHelper + ClaimsHelper (`Helpers.cs` — chưa implement)
-- [ ] `SportPlusDbContext.OnModelCreating`
-- [ ] `Entities.cs`, `Enums.cs`, `IServices.cs`, `IRepositories.cs` (cần điền nội dung)
+- [x] JwtHelper + PasswordHelper + ClaimsHelper (`Helpers.cs` — chưa implement)
+- [x] `SportPlusDbContext.OnModelCreating`
+- [x] `Entities.cs`, `Enums.cs`, `IServices.cs`, `IRepositories.cs` (cần điền nội dung)
 
 ### Giai đoạn 2 — Auth & User
 
-- [ ] AuthRepository + AuthService + AuthController
-- [ ] UserRepository + UserService + UsersController
+- [x] AuthRepository + AuthService + AuthController
+- [x] UserRepository + UserService + UsersController
 
 ### Giai đoạn 3 — Core Booking Flow
 
