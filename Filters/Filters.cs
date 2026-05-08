@@ -1,18 +1,13 @@
+using KLCN_API.Models.DTOs.Response;
+using KLCN_API.Models.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-using KLCN_API.Models.DTOs.Response;
-using KLCN_API.Models.Enums;
+using Microsoft.OpenApi;
+using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace KLCN_API.Filters;
 
-// ── Validation Filter ────────────────────────────────────────────
-
-/// <summary>
-/// Tự động validate ModelState trước khi vào action.
-/// Trả về 400 + danh sách lỗi nếu DTO không hợp lệ.
-/// Đăng ký global: builder.Services.AddControllers(o => o.Filters.Add&lt;ValidationFilter&gt;())
-/// </summary>
 public class ValidationFilter : IActionFilter
 {
     public void OnActionExecuting(ActionExecutingContext context)
@@ -25,25 +20,63 @@ public class ValidationFilter : IActionFilter
             .ToList();
 
         context.Result = new BadRequestObjectResult(
-            ApiResponse.Fail("Dữ liệu không hợp lệ.", errors));
+            ApiResponse.Fail("Du lieu khong hop le.", errors));
     }
 
     public void OnActionExecuted(ActionExecutedContext context) { }
 }
 
-// ── AuthorizeRoles Attribute ─────────────────────────────────────
-
-/// <summary>
-/// Kết hợp [Authorize] + kiểm tra role cụ thể.
-/// Dùng: [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
-/// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
 public class AuthorizeRolesAttribute : AuthorizeAttribute
 {
     public AuthorizeRolesAttribute(params RoleEnum[] roles)
     {
-        // Chuyển roles thành policy name theo chuẩn ASP.NET Core
-        // Roles property của AuthorizeAttribute nhận string CSV
         Roles = string.Join(",", roles.Select(r => r.ToString()));
+    }
+}
+
+public class AuthorizeOperationFilter : IOperationFilter
+{
+    public void Apply(OpenApiOperation operation, OperationFilterContext context)
+    {
+        var hasAllowAnonymous =
+            context.MethodInfo.GetCustomAttributes(true).OfType<AllowAnonymousAttribute>().Any()
+            || (context.MethodInfo.DeclaringType?.GetCustomAttributes(true)
+                    .OfType<AllowAnonymousAttribute>().Any() ?? false);
+
+        if (hasAllowAnonymous)
+        {
+            operation.Security?.Clear();
+            return;
+        }
+
+        var hasAuthorize =
+            context.MethodInfo.GetCustomAttributes(true).OfType<AuthorizeAttribute>().Any()
+            || (context.MethodInfo.DeclaringType?.GetCustomAttributes(true)
+                    .OfType<AuthorizeAttribute>().Any() ?? false);
+
+        if (!hasAuthorize) return;
+
+        operation.Security ??= new List<OpenApiSecurityRequirement>();
+
+        // Swashbuckle 10 / OpenApi 2.x dùng OpenApiSecuritySchemeReference
+        var schemeRef = new OpenApiSecuritySchemeReference("Bearer");
+
+        if (!operation.Security.Any(r => r.ContainsKey(schemeRef)))
+        {
+            operation.Security.Add(new OpenApiSecurityRequirement
+            {
+                { schemeRef, new List<string>() }
+            });
+        }
+
+        operation.Responses?.TryAdd("401", new OpenApiResponse
+        {
+            Description = "Unauthorized - Token không hợp lệ hoặc hết hạn"
+        });
+        operation.Responses?.TryAdd("403", new OpenApiResponse
+        {
+            Description = "Forbidden - Không đủ quyền truy cập"
+        });
     }
 }

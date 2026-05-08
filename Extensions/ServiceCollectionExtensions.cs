@@ -1,6 +1,7 @@
 using System.Text;
 using KLCN_API.Configurations;
 using KLCN_API.Data;
+using KLCN_API.Filters;
 using KLCN_API.Helpers;
 using KLCN_API.Repositories;
 using KLCN_API.Repositories.Interfaces;
@@ -15,8 +16,6 @@ namespace KLCN_API.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    // ── DbContext ────────────────────────────────────────────────
-
     public static IServiceCollection AddDatabase(
         this IServiceCollection services, IConfiguration config)
     {
@@ -28,8 +27,6 @@ public static class ServiceCollectionExtensions
         );
         return services;
     }
-
-    // ── JWT Authentication ───────────────────────────────────────
 
     public static IServiceCollection AddJwtAuthentication(
         this IServiceCollection services, IConfiguration config)
@@ -92,8 +89,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    // ── CORS ─────────────────────────────────────────────────────
-
     public static IServiceCollection AddCorsPolicy(
         this IServiceCollection services, IConfiguration config)
     {
@@ -119,8 +114,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    // ── Swagger ──────────────────────────────────────────────────
-
     public static IServiceCollection AddSwaggerWithAuth(this IServiceCollection services)
     {
         services.AddSwaggerGen(c =>
@@ -135,19 +128,13 @@ public static class ServiceCollectionExtensions
             c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Name = "Authorization",
-                Type = SecuritySchemeType.Http,
-                Scheme = "bearer",
-                BearerFormat = "JWT",
+                Type = SecuritySchemeType.ApiKey,
                 In = ParameterLocation.Header,
-                Description = "Nhap JWT token. VD: Bearer {token}"
+                Description = "Nhap: Bearer {token}"
             });
 
-            var schemeRef = new OpenApiSecuritySchemeReference("Bearer");
-
-            c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
-            {
-                { schemeRef, new List<string>() }
-            });
+            // Bỏ AddSecurityRequirement global — để AuthorizeOperationFilter xử lý
+            c.OperationFilter<AuthorizeOperationFilter>();
 
             c.TagActionsBy(api =>
                 new[] { api.GroupName ?? api.ActionDescriptor.RouteValues["controller"]! });
@@ -156,14 +143,10 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    // ── Application Services ─────────────────────────────────────
-
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
-        // Giai doan 2
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
-
         // Giai doan 3+:
         // services.AddScoped<IFieldService, FieldService>();
         // services.AddScoped<IBookingService, BookingService>();
@@ -179,14 +162,10 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    // ── Repositories ─────────────────────────────────────────────
-
     public static IServiceCollection AddRepositories(this IServiceCollection services)
     {
-        // Giai doan 2
         services.AddScoped<IAuthRepository, AuthRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
-
         // Giai doan 3+:
         // services.AddScoped<IFieldRepository, FieldRepository>();
         // services.AddScoped<IFieldSlotRepository, FieldSlotRepository>();

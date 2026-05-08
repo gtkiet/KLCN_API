@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // Configurations/JwtSettings.cs
 // ============================================================
 // POCO để bind từ appsettings.json > JwtSettings
@@ -12,12 +12,4 @@ public class JwtSettings
     public string Audience { get; set; } = null!;
     public int AccessTokenExpiryMinutes { get; set; } = 60;
     public int RefreshTokenExpiryDays { get; set; } = 30;
-}
-
-// ============================================================
-// Configurations/CorsSettings.cs
-// ============================================================
-public class CorsSettings
-{
-    public List<string> AllowedOrigins { get; set; } = [];
 }
