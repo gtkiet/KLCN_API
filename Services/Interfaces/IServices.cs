@@ -1,128 +1,219 @@
-//// ============================================================
-//// Services/Interfaces/IServices.cs
-//// Interface cho tất cả Service — placeholder
-//// ============================================================
-//// Quy ước đặt tên:
-////   IAuthService, IUserService, IFieldService, IBookingService, ...
-////   Mỗi method trả về Task<ApiResponse<T>> hoặc Task<T>
-//// ============================================================
+using KLCN_API.Models.DTOs.Request;
+using KLCN_API.Models.DTOs.Response;
+using KLCN_API.Models.Entities;
 
-//using KLCN_API.Models.DTOs.Request;
-//using KLCN_API.Models.DTOs.Response;
+namespace KLCN_API.Services.Interfaces;
 
-//namespace KLCN_API.Services.Interfaces;
+// ================================================================
+// Auth
+// ================================================================
 
-//public interface IAuthService
+public interface IAuthService
+{
+    Task<LoginResponse> RegisterAsync(RegisterRequest request);
+    Task<LoginResponse> LoginAsync(LoginRequest request);
+    Task<TokenResponse> RefreshTokenAsync(RefreshTokenRequest request);
+    Task LogoutAsync(int userId);
+}
+
+//// ================================================================
+//// Profile
+//// ================================================================
+
+//public interface IProfileService
 //{
-//    // TODO: Task<ApiResponse<AuthResponse>> RegisterAsync(RegisterRequest request)
-//    // TODO: Task<ApiResponse<AuthResponse>> LoginAsync(LoginRequest request)
-//    // TODO: Task<ApiResponse<AuthResponse>> RefreshTokenAsync(RefreshTokenRequest request)
-//    // TODO: Task<ApiResponse> LogoutAsync(int userId, string refreshToken)
-//    // TODO: Task<ApiResponse> ChangePasswordAsync(int userId, ChangePasswordRequest request)
+//    Task<UserDetailResponse> GetProfileAsync(int userId);
+//    Task<UserDetailResponse> UpdateProfileAsync(int userId, UpdateProfileRequest request);
+//    Task ChangePasswordAsync(int userId, ChangePasswordRequest request);
 //}
+
+//// ================================================================
+//// Users
+//// ================================================================
 
 //public interface IUserService
 //{
-//    // TODO: Task<ApiResponse<PagedResponse<UserSummaryResponse>>> GetUsersAsync(GetUsersRequest request)
-//    // TODO: Task<ApiResponse<UserSummaryResponse>> GetUserByIdAsync(int userId)
-//    // TODO: Task<ApiResponse> UpdateProfileAsync(int userId, UpdateProfileRequest request)
-//    // TODO: Task<ApiResponse> UpdateUserStatusAsync(int userId, UpdateUserStatusRequest request)
-//    // TODO: Task<ApiResponse> DeleteUserAsync(int userId)
+//    Task<UserDetailResponse> GetByIdAsync(int userId);
+//    Task<PagedResponse<UserResponse>> GetUsersAsync(GetUsersRequest request);
+//    Task LockUserAsync(int userId);
+//    Task UnlockUserAsync(int userId);
+//    Task DeleteUserAsync(int userId);
 //}
+
+//// ================================================================
+//// Fields
+//// ================================================================
 
 //public interface IFieldService
 //{
-//    // TODO: Task<ApiResponse<List<FieldResponse>>> GetFieldsAsync(int? typeId, int? statusId)
-//    // TODO: Task<ApiResponse<FieldResponse>> GetFieldByIdAsync(int fieldId)
-//    // TODO: Task<ApiResponse<FieldResponse>> CreateFieldAsync(CreateFieldRequest request)
-//    // TODO: Task<ApiResponse<FieldResponse>> UpdateFieldAsync(int fieldId, UpdateFieldRequest request)
-//    // TODO: Task<ApiResponse> DeleteFieldAsync(int fieldId)
-//    // TODO: Task<ApiResponse<FieldScheduleResponse>> GetScheduleAsync(GetFieldScheduleRequest request)
-//    // TODO: Task<ApiResponse> GenerateSlotsAsync(DateOnly startDate, DateOnly endDate)
-//    // TODO: Task<ApiResponse> SetMaintenanceAsync(int fieldId, CreateMaintenanceRequest request)
+//    Task<PagedResponse<FieldResponse>> GetFieldsAsync(GetFieldsRequest request);
+//    Task<FieldResponse> GetByIdAsync(int fieldId);
+//    Task<FieldResponse> CreateAsync(int adminId, CreateFieldRequest request);
+//    Task<FieldResponse> UpdateAsync(int fieldId, int adminId, UpdateFieldRequest request);
+//    Task DeleteAsync(int fieldId);
+
+//    Task<List<FieldScheduleResponse>> GetScheduleAsync(GetFieldScheduleRequest request);
+//    Task GenerateSlotsAsync(GenerateSlotsRequest request);
+
+//    Task<List<FieldPriceHistoryResponse>> GetPriceHistoryAsync(int fieldId);
+//    //Task<List<FieldMaintenanceLogResponse>> GetMaintenanceLogsAsync(int fieldId);
+//    Task AddMaintenanceLogAsync(int fieldId, int createdBy, CreateMaintenanceRequest request);
 //}
+
+//// ================================================================
+//// Bookings
+//// ================================================================
 
 //public interface IBookingService
 //{
-//    // TODO: Task<ApiResponse> HoldSlotsAsync(HoldSlotsRequest request, int userId)
-//    // TODO: Task<ApiResponse<BookingResponse>> CreateBookingAsync(CreateBookingRequest request, int userId)
-//    // TODO: Task<ApiResponse<BookingResponse>> GetBookingByIdAsync(int bookingId, int requesterId)
-//    // TODO: Task<ApiResponse<PagedResponse<BookingSummaryResponse>>> GetBookingsAsync(GetBookingsRequest request)
-//    // TODO: Task<ApiResponse> CancelBookingAsync(int bookingId, CancelBookingRequest request, int userId, bool isAdmin)
-//    // TODO: Task<ApiResponse> RescheduleAsync(int bookingId, RescheduleRequest request, int userId)
-//    // TODO: Task<ApiResponse> ApplyVoucherAsync(int bookingId, ApplyVoucherRequest request)
-//    // TODO: Task<ApiResponse<List<BookingSummaryResponse>>> GetMyBookingsAsync(int userId)
+//    Task HoldSlotsAsync(HoldSlotsRequest request, int userId);
+//    Task<BookingResponse> CreateBookingAsync(CreateBookingRequest request, int userId);
+//    Task<BookingResponse> GetByIdAsync(int bookingId, int requesterId, bool isAdminOrStaff);
+//    Task<PagedResponse<BookingSummaryResponse>> GetBookingsAsync(GetBookingsRequest request);
+//    Task<PagedResponse<BookingSummaryResponse>> GetMyBookingsAsync(int userId, int page, int pageSize);
+//    Task CancelAsync(int bookingId, CancelBookingRequest request, int userId, bool isAdminOverride);
+//    Task RescheduleAsync(int bookingId, RescheduleRequest request, int userId);
+//    Task ApplyVoucherAsync(int bookingId, ApplyVoucherRequest request, int userId);
 //}
+
+//// ================================================================
+//// Payments
+//// ================================================================
 
 //public interface IPaymentService
 //{
-//    // TODO: Task<ApiResponse> RecordDepositAsync(int bookingId, RecordDepositRequest request, int userId)
-//    // TODO: Task<ApiResponse> RecordFullPaymentAsync(int bookingId, ConfirmPaymentRequest request)
-//    // TODO: Task<ApiResponse<List<PaymentResponse>>> GetPaymentsByBookingAsync(int bookingId)
-//    // TODO: Task<ApiResponse<DepositResponse>> GetDepositByBookingAsync(int bookingId)
+//    Task RecordDepositAsync(int bookingId, RecordDepositRequest request, int userId);
+//    Task RecordFullPaymentAsync(int bookingId, ConfirmPaymentRequest request, int userId);
+//    Task<List<PaymentResponse>> GetPaymentsByBookingAsync(int bookingId);
+//    Task<DepositResponse?> GetDepositByBookingAsync(int bookingId);
 //}
+
+//// ================================================================
+//// Promotions
+//// ================================================================
 
 //public interface IPromotionService
 //{
-//    // TODO: Task<ApiResponse<List<PromotionResponse>>> GetPromotionsAsync(bool? isActive)
-//    // TODO: Task<ApiResponse<PromotionResponse>> GetPromotionByCodeAsync(string code)
-//    // TODO: Task<ApiResponse<PromotionResponse>> CreatePromotionAsync(CreatePromotionRequest request, int createdBy)
-//    // TODO: Task<ApiResponse<PromotionResponse>> UpdatePromotionAsync(int id, CreatePromotionRequest request)
-//    // TODO: Task<ApiResponse> TogglePromotionAsync(int id)
+//    Task<PagedResponse<PromotionResponse>> GetPromotionsAsync(bool? isActive, int page, int pageSize);
+//    Task<PromotionResponse> GetByIdAsync(int promotionId);
+//    Task<PromotionResponse> CreateAsync(int adminId, CreatePromotionRequest request);
+//    Task<PromotionResponse> UpdateAsync(int promotionId, UpdatePromotionRequest request);
+//    Task ToggleActiveAsync(int promotionId);
 //}
+
+//// ================================================================
+//// Services (dịch vụ đi kèm)
+//// ================================================================
 
 //public interface IServiceService
 //{
-//    // TODO: Task<ApiResponse<List<ServiceResponse>>> GetServicesAsync(bool? isAvailable)
-//    // TODO: Task<ApiResponse<ServiceResponse>> CreateServiceAsync(CreateServiceRequest request)
-//    // TODO: Task<ApiResponse<ServiceResponse>> UpdateServiceAsync(int id, UpdateServiceRequest request)
-//    // TODO: Task<ApiResponse> DeleteServiceAsync(int id)
+//    Task<List<ServiceResponse>> GetAllAsync(bool? isAvailable);
+//    Task<ServiceResponse> GetByIdAsync(int serviceId);
+//    Task<ServiceResponse> CreateAsync(CreateServiceRequest request);
+//    Task<ServiceResponse> UpdateAsync(int serviceId, UpdateServiceRequest request);
+//    Task DeleteAsync(int serviceId);
 //}
 
-//public interface IInventoryService
+//// ================================================================
+//// Inventory
+//// ================================================================
+
+//public interface ISupplierService
 //{
-//    // TODO: Task<ApiResponse<List<SupplierResponse>>> GetSuppliersAsync()
-//    // TODO: Task<ApiResponse<SupplierResponse>> CreateSupplierAsync(CreateSupplierRequest request)
-//    // TODO: Task<ApiResponse<List<ProductResponse>>> GetProductsAsync()
-//    // TODO: Task<ApiResponse<List<ProductResponse>>> GetLowStockProductsAsync()
-//    // TODO: Task<ApiResponse<PurchaseOrderResponse>> CreatePurchaseOrderAsync(CreatePurchaseOrderRequest request, int userId)
-//    // TODO: Task<ApiResponse> ConfirmPurchaseOrderAsync(int orderId, int userId)
+//    Task<PagedResponse<SupplierResponse>> GetSuppliersAsync(string? search, int page, int pageSize);
+//    Task<SupplierResponse> GetByIdAsync(int supplierId);
+//    Task<SupplierResponse> CreateAsync(CreateSupplierRequest request);
+//    Task<SupplierResponse> UpdateAsync(int supplierId, UpdateSupplierRequest request);
+//    Task DeleteAsync(int supplierId);
 //}
+
+//public interface IProductService
+//{
+//    Task<PagedResponse<ProductResponse>> GetProductsAsync(string? search, int page, int pageSize);
+//    Task<List<ProductResponse>> GetLowStockAsync();
+//    Task<ProductResponse> GetByIdAsync(int productId);
+//    Task<ProductResponse> CreateAsync(CreateProductRequest request);
+//    Task UpdateAsync(int productId, Product product);
+//}
+
+//public interface IPurchaseOrderService
+//{
+//    Task<PagedResponse<PurchaseOrderResponse>> GetPurchaseOrdersAsync(int? statusId, int page, int pageSize);
+//    Task<PurchaseOrderResponse> GetByIdAsync(int purchaseOrderId);
+//    Task<PurchaseOrderResponse> CreateAsync(CreatePurchaseOrderRequest request, int createdBy);
+//    Task ConfirmAsync(int purchaseOrderId, int confirmedBy);
+//    Task CancelAsync(int purchaseOrderId);
+//}
+
+//// ================================================================
+//// Incidents
+//// ================================================================
 
 //public interface IIncidentService
 //{
-//    // TODO: Task<ApiResponse<List<IncidentResponse>>> GetIncidentsAsync(int? fieldId, int? statusId)
-//    // TODO: Task<ApiResponse<IncidentResponse>> CreateIncidentAsync(CreateIncidentRequest request, int userId)
-//    // TODO: Task<ApiResponse> HandleIncidentAsync(int id, HandleIncidentRequest request, int handlerId)
+//    Task<PagedResponse<IncidentResponse>> GetIncidentsAsync(int? fieldId, int? statusId, int page, int pageSize);
+//    Task<IncidentResponse> GetByIdAsync(int incidentId);
+//    Task<IncidentResponse> CreateAsync(CreateIncidentRequest request, int reportedBy);
+//    Task HandleAsync(int incidentId, HandleIncidentRequest request, int handledBy);
 //}
+
+//// ================================================================
+//// Reviews
+//// ================================================================
 
 //public interface IReviewService
 //{
-//    // TODO: Task<ApiResponse<ReviewResponse>> CreateReviewAsync(CreateReviewRequest request, int userId)
-//    // TODO: Task<ApiResponse<FieldRatingResponse>> GetFieldRatingAsync(int fieldId)
-//    // TODO: Task<ApiResponse<PagedResponse<ReviewResponse>>> GetReviewsByFieldAsync(int fieldId, int page, int pageSize)
-//    // TODO: Task<ApiResponse> ToggleReviewVisibilityAsync(int reviewId)
+//    Task<PagedResponse<ReviewResponse>> GetReviewsAsync(GetReviewsRequest request);
+//    Task<FieldRatingResponse> GetFieldRatingAsync(int fieldId);
+//    Task<ReviewResponse> CreateAsync(CreateReviewRequest request, int userId);
+//    Task ToggleVisibilityAsync(int reviewId);
 //}
+
+//// ================================================================
+//// Notifications
+//// ================================================================
 
 //public interface INotificationService
 //{
-//    // TODO: Task<ApiResponse<PagedResponse<NotificationResponse>>> GetNotificationsAsync(int userId, GetNotificationsRequest request)
-//    // TODO: Task<ApiResponse> MarkAsReadAsync(int userId, int notificationId)
-//    // TODO: Task<ApiResponse> MarkAllAsReadAsync(int userId)
-//    // TODO: Task SendNotificationAsync(int userId, string title, string body, string type, int? refId)
+//    Task<PagedResponse<NotificationResponse>> GetByUserAsync(int userId, GetNotificationsRequest request);
+//    Task<int> CountUnreadAsync(int userId);
+//    Task MarkAsReadAsync(int userId, int notificationId);
+//    Task MarkAllAsReadAsync(int userId);
+//    Task SendAsync(int userId, string title, string body, string type, int? refId = null);
 //}
+
+//// ================================================================
+//// Dashboard
+//// ================================================================
 
 //public interface IDashboardService
 //{
-//    // TODO: Task<ApiResponse<DashboardSummaryResponse>> GetSummaryAsync()
-//    // TODO: Task<ApiResponse<List<RevenueByMonthResponse>>> GetRevenueByMonthAsync(int year)
-//    // TODO: Task<ApiResponse<List<FieldOccupancyResponse>>> GetOccupancyAsync(int year, int month)
-//    // TODO: Task<ApiResponse<List<ServiceResponse>>> GetTopServicesAsync()
+//    Task<DashboardSummaryResponse> GetSummaryAsync();
+//    Task<List<RevenueByMonthResponse>> GetRevenueByMonthAsync(int year);
+//    Task<List<FieldOccupancyResponse>> GetOccupancyAsync(int? year, int? month);
+//    Task<List<RevenueByServiceResponse>> GetRevenueByServiceAsync();
 //}
+
+//// ================================================================
+//// System Config
+//// ================================================================
 
 //public interface ISystemConfigService
 //{
-//    // TODO: Task<ApiResponse<List<SystemConfigResponse>>> GetAllConfigsAsync()
-//    // TODO: Task<ApiResponse<SystemConfigResponse>> GetConfigAsync(string key)
-//    // TODO: Task<ApiResponse> UpdateConfigAsync(UpdateSystemConfigRequest request, int userId)
+//    Task<List<SystemConfigResponse>> GetAllAsync();
+//    Task<SystemConfigResponse> GetByKeyAsync(string key);
+//    Task UpdateAsync(string key, UpdateSystemConfigRequest request, int updatedBy);
+//}
+
+//// ================================================================
+//// Special Days
+//// ================================================================
+
+//public interface ISpecialDayService
+//{
+//    Task<List<SpecialDayResponse>> GetAllAsync();
+//    Task<SpecialDayResponse> GetByIdAsync(int specialDayId);
+//    Task<SpecialDayResponse> CreateAsync(CreateSpecialDayRequest request, int createdBy);
+//    Task<SpecialDayResponse> UpdateAsync(int specialDayId, UpdateSpecialDayRequest request);
+//    Task DeleteAsync(int specialDayId);
 //}

@@ -8,7 +8,7 @@ public class SportPlusDbContext : DbContext
     public SportPlusDbContext(DbContextOptions<SportPlusDbContext> options)
         : base(options) { }
 
-    // ── Lookup Tables ────────────────────────────────────────────
+    // ── Lookup tables ────────────────────────────────────────────
     public DbSet<Role> Roles { get; set; }
     public DbSet<UserStatus> UserStatuses { get; set; }
     public DbSet<FieldType> FieldTypes { get; set; }
@@ -23,6 +23,7 @@ public class SportPlusDbContext : DbContext
     public DbSet<PromotionType> PromotionTypes { get; set; }
 
     // ── System ───────────────────────────────────────────────────
+    // DbSet ten "SystemConfigs" nhung bang SQL la "SystemConfig" -> can ToTable()
     public DbSet<SystemConfig> SystemConfigs { get; set; }
 
     // ── Users ────────────────────────────────────────────────────
@@ -32,12 +33,13 @@ public class SportPlusDbContext : DbContext
 
     // ── Fields ───────────────────────────────────────────────────
     public DbSet<Field> Fields { get; set; }
+    // DbSet ten "FieldPriceHistories" nhung bang SQL la "FieldPriceHistory" -> can ToTable()
     public DbSet<FieldPriceHistory> FieldPriceHistories { get; set; }
     public DbSet<TimeSlot> TimeSlots { get; set; }
     public DbSet<FieldSlot> FieldSlots { get; set; }
     public DbSet<FieldMaintenanceLog> FieldMaintenanceLogs { get; set; }
 
-    // ── Special Days & Peak ──────────────────────────────────────
+    // ── Special days & peak schedules ────────────────────────────
     public DbSet<SpecialDay> SpecialDays { get; set; }
     public DbSet<PeakSchedule> PeakSchedules { get; set; }
 
@@ -61,7 +63,7 @@ public class SportPlusDbContext : DbContext
     public DbSet<PurchaseOrder> PurchaseOrders { get; set; }
     public DbSet<PurchaseOrderDetail> PurchaseOrderDetails { get; set; }
 
-    // ── Incidents & Reviews ──────────────────────────────────────
+    // ── Incidents & reviews ──────────────────────────────────────
     public DbSet<Incident> Incidents { get; set; }
     public DbSet<Review> Reviews { get; set; }
 
@@ -72,15 +74,23 @@ public class SportPlusDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // ── Soft delete: KHÔNG dùng global query filter ──────────
-        // Lý do: các entity User/Field/Service/Supplier/Product là
-        // "required end" của nhiều relationships. Global filter gây
-        // warning 10622 và có thể trả kết quả sai khi join.
-        // → Filter IsDeleted = false thủ công tại từng query cần thiết.
-        // Ví dụ: _ctx.Users.Where(u => !u.IsDeleted)
-        //         _ctx.Fields.Where(f => !f.IsDeleted)
+        // ── Table name overrides ──────────────────────────────────
+        // EF Core pluralize ten DbSet thanh ten bang theo convention,
+        // nhung hai bang nay trong SQL duoc dat ten so it / khac quy tac.
+        modelBuilder.Entity<SystemConfig>()
+            .ToTable("SystemConfig");
 
-        // ── Unique constraints ───────────────────────────────────
+        modelBuilder.Entity<FieldPriceHistory>()
+            .ToTable("FieldPriceHistory");
+
+        // ── Soft delete ───────────────────────────────────────────
+        // Khong dung global query filter de tranh EF warning 10622
+        // (required-end relationship bi filter gay ket qua sai khi join).
+        // Loc thu cong tai tung query:
+        //   _ctx.Users.Where(u => !u.IsDeleted)
+        //   _ctx.Fields.Where(f => !f.IsDeleted)
+
+        // ── Unique constraints ────────────────────────────────────
         modelBuilder.Entity<User>()
             .HasIndex(u => u.Email).IsUnique();
         modelBuilder.Entity<User>()
@@ -101,30 +111,38 @@ public class SportPlusDbContext : DbContext
         modelBuilder.Entity<PeakSchedule>()
             .HasIndex(ps => new { ps.DayOfWeek, ps.SlotId }).IsUnique();
 
-        // BookingDetail: 1 FieldSlot chỉ thuộc 1 BookingDetail
+        // 1 FieldSlot chi thuoc 1 BookingDetail (unique FK)
         modelBuilder.Entity<BookingDetail>()
             .HasIndex(bd => bd.FieldSlotId).IsUnique();
 
-        // Deposit: 1 booking chỉ có 1 deposit
+        // 1 Booking chi co 1 Deposit
         modelBuilder.Entity<Deposit>()
             .HasIndex(d => d.BookingId).IsUnique();
 
-        // Review: 1 booking chỉ có 1 review
+        // 1 Booking chi co 1 Review
         modelBuilder.Entity<Review>()
             .HasIndex(r => r.BookingId).IsUnique();
 
-        // BookingService: unique per booking+service
+        // 1 Booking chi dat moi Service 1 lan
         modelBuilder.Entity<BookingService>()
             .HasIndex(bs => new { bs.BookingId, bs.ServiceId }).IsUnique();
 
         modelBuilder.Entity<PurchaseOrderDetail>()
             .HasIndex(pod => new { pod.PurchaseOrderId, pod.ProductId }).IsUnique();
 
-        // ── Self-referencing & multi-FK relationships ────────────
+        // ── Relationships ─────────────────────────────────────────
 
-        // BookingLog: OldStatusId / NewStatusId đều FK về BookingStatuses
-        // → tắt cascade để tránh multiple cascade paths
-        // BookingStatus không có inverse navigation → WithMany() không tham số
+        // FieldSlot <-> BookingDetail: 1-1 optional.
+        // Khai bao tuong minh de EF khong tu sinh FK nguoc hoac nham
+        // voi unique index da co tren BookingDetail.FieldSlotId.
+        modelBuilder.Entity<FieldSlot>()
+            .HasOne(fs => fs.BookingDetail)
+            .WithOne(bd => bd.FieldSlot)
+            .HasForeignKey<BookingDetail>(bd => bd.FieldSlotId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // BookingLog: OldStatusId va NewStatusId cung tro ve BookingStatuses
+        // -> tat cascade de tranh multiple cascade paths.
         modelBuilder.Entity<BookingLog>()
             .HasOne<BookingStatus>()
             .WithMany()
@@ -149,7 +167,7 @@ public class SportPlusDbContext : DbContext
             .HasForeignKey(bl => bl.BookingId)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // Incident: 2 FK về Users → tắt cascade
+        // Incident: ReportedByUserId va HandledByUserId cung tro ve Users.
         modelBuilder.Entity<Incident>()
             .HasOne(i => i.ReportedByUser)
             .WithMany()
@@ -162,109 +180,125 @@ public class SportPlusDbContext : DbContext
             .HasForeignKey(i => i.HandledByUserId)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // FieldPriceHistory: ChangedBy → tắt cascade
+        // FieldPriceHistory.ChangedBy -> Users
         modelBuilder.Entity<FieldPriceHistory>()
             .HasOne(fph => fph.ChangedByUser)
             .WithMany()
             .HasForeignKey(fph => fph.ChangedBy)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // FieldMaintenanceLog: CreatedBy → tắt cascade
+        // FieldMaintenanceLog.CreatedBy -> Users
         modelBuilder.Entity<FieldMaintenanceLog>()
             .HasOne(fml => fml.CreatedByUser)
             .WithMany()
             .HasForeignKey(fml => fml.CreatedBy)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // SystemConfig: UpdatedBy → tắt cascade
+        // SystemConfig.UpdatedBy -> Users
         modelBuilder.Entity<SystemConfig>()
             .HasOne(sc => sc.UpdatedByUser)
             .WithMany()
             .HasForeignKey(sc => sc.UpdatedBy)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // Booking → Promotion: tắt cascade
-        // Promotion không có inverse navigation Bookings → WithMany() không tham số
+        // Booking.PromotionId -> Promotions (Promotion khong co navigation nguoc)
         modelBuilder.Entity<Booking>()
             .HasOne(b => b.Promotion)
             .WithMany()
             .HasForeignKey(b => b.PromotionId)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // Booking → User: tắt cascade (User có nhiều booking)
+        // Booking.UserId -> Users
         modelBuilder.Entity<Booking>()
             .HasOne(b => b.User)
             .WithMany(u => u.Bookings)
             .HasForeignKey(b => b.UserId)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // Deposit → Payment (PaymentId): tắt cascade
+        // Deposit.PaymentId -> Payments (Payment khong quan ly Deposit nguoc lai)
         modelBuilder.Entity<Deposit>()
             .HasOne(d => d.Payment)
             .WithMany()
             .HasForeignKey(d => d.PaymentId)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // Review → Booking, User, Field: tắt cascade
+        // Review <-> Booking: 1-1
         modelBuilder.Entity<Review>()
             .HasOne(r => r.Booking)
             .WithOne(b => b.Review)
             .HasForeignKey<Review>(r => r.BookingId)
             .OnDelete(DeleteBehavior.NoAction);
 
+        // Review.UserId -> Users
         modelBuilder.Entity<Review>()
             .HasOne(r => r.User)
             .WithMany()
             .HasForeignKey(r => r.UserId)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // SpecialDay → User
+        // Review.FieldId -> Fields: tat cascade vi Field da co nhieu FK khac,
+        // de mac dinh se gay multiple cascade paths.
+        modelBuilder.Entity<Review>()
+            .HasOne(r => r.Field)
+            .WithMany(f => f.Reviews)
+            .HasForeignKey(r => r.FieldId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // SpecialDay.CreatedBy -> Users
         modelBuilder.Entity<SpecialDay>()
             .HasOne(sd => sd.CreatedByUser)
             .WithMany()
             .HasForeignKey(sd => sd.CreatedBy)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // Promotion → User
+        // Promotion.CreatedBy -> Users
         modelBuilder.Entity<Promotion>()
             .HasOne(p => p.CreatedByUser)
             .WithMany()
             .HasForeignKey(p => p.CreatedBy)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // ── Performance indexes ──────────────────────────────────
+        // ── Performance indexes ───────────────────────────────────
+
+        // FieldSlots: tim kiem theo san + ngay + trang thai
         modelBuilder.Entity<FieldSlot>()
             .HasIndex(fs => new { fs.FieldId, fs.SlotDate, fs.StatusId });
 
+        // FieldSlots: giai phong slot het han hold (StatusId=2: Dang giu)
         modelBuilder.Entity<FieldSlot>()
             .HasIndex(fs => fs.HoldExpireAt)
-            .HasFilter("[StatusId] = 2"); // Đang giữ
+            .HasFilter("[StatusId] = 2");
 
+        // Bookings: tra cuu theo user, loc theo trang thai + thoi gian tao
         modelBuilder.Entity<Booking>()
             .HasIndex(b => b.UserId);
-
         modelBuilder.Entity<Booking>()
             .HasIndex(b => new { b.StatusId, b.CreatedAt });
 
+        // Deposits: xu ly het han va loc theo trang thai + deadline
         modelBuilder.Entity<Deposit>()
             .HasIndex(d => new { d.StatusId, d.DeadlineAt });
 
+        // Deposits: tim nhanh deposit cho nop (StatusId=1: Cho nop)
         modelBuilder.Entity<Deposit>()
             .HasIndex(d => d.DeadlineAt)
-            .HasFilter("[StatusId] = 1"); // Chờ nộp
+            .HasFilter("[StatusId] = 1");
 
+        // Notifications: doc thong bao chua doc cua user, sap xep moi nhat truoc
         modelBuilder.Entity<Notification>()
             .HasIndex(n => new { n.UserId, n.IsRead, n.CreatedAt });
 
+        // Incidents: loc su co theo san va trang thai
         modelBuilder.Entity<Incident>()
             .HasIndex(i => new { i.FieldId, i.StatusId });
 
+        // RefreshTokens: xac thuc token va loc token con hieu luc cua user
         modelBuilder.Entity<RefreshToken>()
             .HasIndex(rt => rt.Token);
-
         modelBuilder.Entity<RefreshToken>()
             .HasIndex(rt => new { rt.UserId, rt.IsRevoked });
 
+        // Promotions: tra cuu ma voucher, chi index voucher dang active
         modelBuilder.Entity<Promotion>()
             .HasIndex(p => p.Code)
             .HasFilter("[IsActive] = 1");

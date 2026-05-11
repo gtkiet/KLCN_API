@@ -60,16 +60,4 @@ public class AuthController : ControllerBase
         await _authService.LogoutAsync(userId);
         return Ok(ApiResponse.Ok("Đăng xuất thành công."));
     }
-
-    /// <summary>Đổi mật khẩu — user tự đổi.</summary>
-    [HttpPut("change-password")]
-    [Authorize]
-    [ProducesResponseType(typeof(ApiResponse), 200)]
-    [ProducesResponseType(typeof(ApiResponse), 400)]
-    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
-    {
-        var userId = User.GetUserId();
-        await _authService.ChangePasswordAsync(userId, request);
-        return Ok(ApiResponse.Ok("Đổi mật khẩu thành công. Vui lòng đăng nhập lại."));
-    }
 }

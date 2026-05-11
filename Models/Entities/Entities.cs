@@ -4,10 +4,12 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace KLCN_API.Models.Entities;
 
 // ── Lookup tables ──────────────────────────────────────────
+
 public class Role
 {
     [Key] public int RoleId { get; set; }
     [MaxLength(50)] public string Name { get; set; } = null!;
+
     public ICollection<User> Users { get; set; } = [];
 }
 
@@ -21,6 +23,7 @@ public class FieldType
 {
     [Key] public int TypeId { get; set; }
     [MaxLength(50)] public string Name { get; set; } = null!;
+
     public ICollection<Field> Fields { get; set; } = [];
 }
 
@@ -78,7 +81,8 @@ public class PromotionType
     [MaxLength(50)] public string Name { get; set; } = null!;
 }
 
-// ── System Config ──────────────────────────────────────────
+// ── System config ──────────────────────────────────────────
+
 public class SystemConfig
 {
     [Key][MaxLength(100)] public string ConfigKey { get; set; } = null!;
@@ -87,10 +91,12 @@ public class SystemConfig
     [MaxLength(500)] public string? Description { get; set; }
     public DateTime UpdatedAt { get; set; }
     public int? UpdatedBy { get; set; }
+
     [ForeignKey(nameof(UpdatedBy))] public User? UpdatedByUser { get; set; }
 }
 
 // ── Users ──────────────────────────────────────────────────
+
 public class User
 {
     [Key] public int UserId { get; set; }
@@ -118,6 +124,7 @@ public class Profile
     [MaxLength(500)] public string? AvatarUrl { get; set; }
     public DateOnly? DateOfBirth { get; set; }
     [MaxLength(255)] public string? Address { get; set; }
+
     [ForeignKey(nameof(UserId))] public User User { get; set; } = null!;
 }
 
@@ -129,10 +136,12 @@ public class RefreshToken
     public DateTime ExpiresAt { get; set; }
     public bool IsRevoked { get; set; }
     public DateTime CreatedAt { get; set; }
+
     [ForeignKey(nameof(UserId))] public User User { get; set; } = null!;
 }
 
 // ── Fields ─────────────────────────────────────────────────
+
 public class Field
 {
     [Key] public int FieldId { get; set; }
@@ -151,6 +160,9 @@ public class Field
     [ForeignKey(nameof(StatusId))] public FieldStatus Status { get; set; } = null!;
     public ICollection<FieldSlot> FieldSlots { get; set; } = [];
     public ICollection<FieldPriceHistory> PriceHistories { get; set; } = [];
+    public ICollection<FieldMaintenanceLog> MaintenanceLogs { get; set; } = [];
+    // Review.FieldId là FK trực tiếp về Fields nên cần navigation này
+    public ICollection<Review> Reviews { get; set; } = [];
 }
 
 public class FieldPriceHistory
@@ -164,6 +176,7 @@ public class FieldPriceHistory
     public int ChangedBy { get; set; }
     public DateTime ChangedAt { get; set; }
     [MaxLength(255)] public string? Reason { get; set; }
+
     [ForeignKey(nameof(FieldId))] public Field Field { get; set; } = null!;
     [ForeignKey(nameof(ChangedBy))] public User ChangedByUser { get; set; } = null!;
 }
@@ -174,7 +187,10 @@ public class TimeSlot
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
     public bool IsPeakHour { get; set; }
+
     public ICollection<FieldSlot> FieldSlots { get; set; } = [];
+    // PeakSchedules tham chiếu TimeSlot để cấu hình cao điểm theo thứ
+    public ICollection<PeakSchedule> PeakSchedules { get; set; } = [];
 }
 
 public class FieldSlot
@@ -191,6 +207,8 @@ public class FieldSlot
     [ForeignKey(nameof(FieldId))] public Field Field { get; set; } = null!;
     [ForeignKey(nameof(SlotId))] public TimeSlot TimeSlot { get; set; } = null!;
     [ForeignKey(nameof(StatusId))] public FieldSlotStatus Status { get; set; } = null!;
+    // Unique constraint UQ_BookingDetail_Slot đảm bảo 1 FieldSlot chỉ thuộc 1 BookingDetail
+    public BookingDetail? BookingDetail { get; set; }
 }
 
 public class FieldMaintenanceLog
@@ -202,11 +220,13 @@ public class FieldMaintenanceLog
     public DateOnly? EndDate { get; set; }
     public int CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; }
+
     [ForeignKey(nameof(FieldId))] public Field Field { get; set; } = null!;
     [ForeignKey(nameof(CreatedBy))] public User CreatedByUser { get; set; } = null!;
 }
 
-// ── Special Days & Peak ────────────────────────────────────
+// ── Special days & peak schedules ─────────────────────────
+
 public class SpecialDay
 {
     [Key] public int SpecialDayId { get; set; }
@@ -217,6 +237,7 @@ public class SpecialDay
     [MaxLength(255)] public string? Note { get; set; }
     public int CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; }
+
     [ForeignKey(nameof(CreatedBy))] public User CreatedByUser { get; set; } = null!;
 }
 
@@ -226,10 +247,12 @@ public class PeakSchedule
     public byte DayOfWeek { get; set; }
     public int SlotId { get; set; }
     public bool IsPeak { get; set; } = true;
+
     [ForeignKey(nameof(SlotId))] public TimeSlot TimeSlot { get; set; } = null!;
 }
 
 // ── Bookings ───────────────────────────────────────────────
+
 public class Booking
 {
     [Key] public int BookingId { get; set; }
@@ -264,6 +287,7 @@ public class BookingDetail
     public int BookingId { get; set; }
     public int FieldSlotId { get; set; }
     [Column(TypeName = "decimal(12,2)")] public decimal Price { get; set; }
+
     [ForeignKey(nameof(BookingId))] public Booking Booking { get; set; } = null!;
     [ForeignKey(nameof(FieldSlotId))] public FieldSlot FieldSlot { get; set; } = null!;
 }
@@ -277,6 +301,7 @@ public class BookingLog
     public int? ChangedByUserId { get; set; }
     [MaxLength(500)] public string? Note { get; set; }
     public DateTime ChangedAt { get; set; }
+
     [ForeignKey(nameof(BookingId))] public Booking Booking { get; set; } = null!;
     [ForeignKey(nameof(ChangedByUserId))] public User? ChangedByUser { get; set; }
 }
@@ -293,6 +318,7 @@ public class Payment
     [MaxLength(255)] public string? Note { get; set; }
     public DateTime? PaidAt { get; set; }
     public DateTime CreatedAt { get; set; }
+
     [ForeignKey(nameof(BookingId))] public Booking Booking { get; set; } = null!;
     [ForeignKey(nameof(StatusId))] public PaymentStatus Status { get; set; } = null!;
     [ForeignKey(nameof(MethodId))] public PaymentMethod Method { get; set; } = null!;
@@ -313,12 +339,14 @@ public class Deposit
     [MaxLength(255)] public string? Note { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
     [ForeignKey(nameof(BookingId))] public Booking Booking { get; set; } = null!;
     [ForeignKey(nameof(StatusId))] public DepositStatus Status { get; set; } = null!;
     [ForeignKey(nameof(PaymentId))] public Payment? Payment { get; set; }
 }
 
 // ── Services ───────────────────────────────────────────────
+
 public class Service
 {
     [Key] public int ServiceId { get; set; }
@@ -338,11 +366,13 @@ public class BookingService
     public int ServiceId { get; set; }
     public int Quantity { get; set; } = 1;
     [Column(TypeName = "decimal(12,2)")] public decimal UnitPrice { get; set; }
+
     [ForeignKey(nameof(BookingId))] public Booking Booking { get; set; } = null!;
     [ForeignKey(nameof(ServiceId))] public Service Service { get; set; } = null!;
 }
 
 // ── Promotions ─────────────────────────────────────────────
+
 public class Promotion
 {
     [Key] public int PromotionId { get; set; }
@@ -360,11 +390,13 @@ public class Promotion
     public bool IsActive { get; set; } = true;
     public int CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; }
+
     [ForeignKey(nameof(TypeId))] public PromotionType Type { get; set; } = null!;
     [ForeignKey(nameof(CreatedBy))] public User CreatedByUser { get; set; } = null!;
 }
 
 // ── Inventory ──────────────────────────────────────────────
+
 public class Supplier
 {
     [Key] public int SupplierId { get; set; }
@@ -374,6 +406,7 @@ public class Supplier
     [MaxLength(100)] public string? Email { get; set; }
     [MaxLength(255)] public string? Address { get; set; }
     public bool IsDeleted { get; set; }
+
     public ICollection<PurchaseOrder> PurchaseOrders { get; set; } = [];
 }
 
@@ -397,6 +430,7 @@ public class PurchaseOrder
     [MaxLength(500)] public string? Note { get; set; }
     public DateTime? ConfirmedAt { get; set; }
     public DateTime CreatedAt { get; set; }
+
     [ForeignKey(nameof(SupplierId))] public Supplier Supplier { get; set; } = null!;
     [ForeignKey(nameof(CreatedByUserId))] public User CreatedByUser { get; set; } = null!;
     [ForeignKey(nameof(StatusId))] public PurchaseOrderStatus Status { get; set; } = null!;
@@ -410,11 +444,13 @@ public class PurchaseOrderDetail
     public int ProductId { get; set; }
     public int Quantity { get; set; }
     [Column(TypeName = "decimal(12,2)")] public decimal UnitPrice { get; set; }
+
     [ForeignKey(nameof(PurchaseOrderId))] public PurchaseOrder PurchaseOrder { get; set; } = null!;
     [ForeignKey(nameof(ProductId))] public Product Product { get; set; } = null!;
 }
 
 // ── Incidents ──────────────────────────────────────────────
+
 public class Incident
 {
     [Key] public int IncidentId { get; set; }
@@ -428,6 +464,7 @@ public class Incident
     public DateTime? HandledAt { get; set; }
     [MaxLength(500)] public string? HandledNote { get; set; }
     public DateTime CreatedAt { get; set; }
+
     [ForeignKey(nameof(FieldId))] public Field Field { get; set; } = null!;
     [ForeignKey(nameof(ReportedByUserId))] public User ReportedByUser { get; set; } = null!;
     [ForeignKey(nameof(HandledByUserId))] public User? HandledByUser { get; set; }
@@ -435,6 +472,7 @@ public class Incident
 }
 
 // ── Reviews ────────────────────────────────────────────────
+
 public class Review
 {
     [Key] public int ReviewId { get; set; }
@@ -447,12 +485,14 @@ public class Review
     public bool IsVisible { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
     [ForeignKey(nameof(BookingId))] public Booking Booking { get; set; } = null!;
     [ForeignKey(nameof(UserId))] public User User { get; set; } = null!;
     [ForeignKey(nameof(FieldId))] public Field Field { get; set; } = null!;
 }
 
 // ── Notifications ──────────────────────────────────────────
+
 public class Notification
 {
     [Key] public int NotificationId { get; set; }
@@ -463,5 +503,6 @@ public class Notification
     public int? RefId { get; set; }
     public bool IsRead { get; set; }
     public DateTime CreatedAt { get; set; }
+
     [ForeignKey(nameof(UserId))] public User User { get; set; } = null!;
 }

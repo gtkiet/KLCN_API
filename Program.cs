@@ -47,18 +47,6 @@ app.UseSwaggerUI(options =>
 
 app.UseHttpsRedirection();
 
-//var imagePath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads");
-
-//if (!Directory.Exists(imagePath))
-//{
-//    Directory.CreateDirectory(imagePath);
-//}
-
-//app.UseStaticFiles(new StaticFileOptions
-//{
-//    FileProvider = new PhysicalFileProvider(imagePath),
-//    RequestPath = "/Uploads"
-//});
 var uploadPath = Path.Combine(
     Directory.GetParent(Directory.GetCurrentDirectory())!.FullName,
     "Uploads");

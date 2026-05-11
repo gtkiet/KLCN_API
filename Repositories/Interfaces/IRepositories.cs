@@ -1,118 +1,287 @@
-//// ============================================================
-//// Repositories/Interfaces/IRepositories.cs
-//// Interface cho data access layer — placeholder
-//// ============================================================
-//// Quy ước:
-////   - Dùng IGenericRepository<T> cho CRUD cơ bản
-////   - Mỗi entity phức tạp có ISpecificRepository riêng
-////   - Gọi Stored Procedure qua ExecuteStoredProcedureAsync hoặc FromSqlRaw
-//// ============================================================
+using KLCN_API.Models.Entities;
 
-//using KLCN_API.Models.Entities;
+namespace KLCN_API.Repositories.Interfaces;
 
-//namespace KLCN_API.Repositories.Interfaces;
+// ================================================================
+// Auth
+// ================================================================
 
-///// <summary>CRUD cơ bản dùng chung</summary>
-//public interface IGenericRepository<T> where T : class
+public interface IAuthRepository
+{
+    Task<User?> GetByEmailAsync(string email);
+    Task<bool> EmailExistsAsync(string email);
+    Task<bool> PhoneExistsAsync(string phone);
+    Task<User> CreateUserAsync(User user, Profile profile);
+    Task<RefreshToken?> GetRefreshTokenAsync(string token);
+    Task AddRefreshTokenAsync(RefreshToken token);
+    Task RevokeRefreshTokenAsync(string token);
+    Task RevokeAllRefreshTokensAsync(int userId);
+}
+
+//// ================================================================
+//// Users
+//// ================================================================
+
+//public interface IUserRepository
 //{
-//    // TODO: Task<T?> GetByIdAsync(int id)
-//    // TODO: Task<List<T>> GetAllAsync()
-//    // TODO: Task<T> AddAsync(T entity)
-//    // TODO: Task UpdateAsync(T entity)
-//    // TODO: Task DeleteAsync(int id)
-//    // TODO: Task<bool> ExistsAsync(int id)
+//    Task<User?> GetByIdAsync(int userId);
+//    Task<(List<User> Items, int TotalCount)> GetUsersAsync(
+//        string? search, int? roleId, int? statusId, int page, int pageSize);
+//    Task UpdateProfileAsync(int userId, string? fullName, string? phone,
+//        string? avatarUrl, DateOnly? dateOfBirth, string? address);
+//    Task UpdateStatusAsync(int userId, int statusId);
+//    Task SoftDeleteAsync(int userId);
+//    Task UpdatePasswordAsync(int userId, string newPasswordHash);
 //}
 
-//public interface IUserRepository : IGenericRepository<User>
+//// ================================================================
+//// Fields
+//// ================================================================
+
+//public interface IFieldRepository
 //{
-//    // TODO: Task<User?> GetByEmailAsync(string email)
-//    // TODO: Task<User?> GetByPhoneAsync(string phone)
-//    // TODO: Task<User?> GetWithProfileAsync(int userId)
-//    // TODO: Task<(List<User> users, int total)> GetPagedAsync(string? keyword, int? roleId, int? statusId, int page, int pageSize)
+//    Task<Field?> GetByIdAsync(int fieldId);
+//    Task<(List<Field> Items, int TotalCount)> GetFieldsAsync(
+//        string? search, int? typeId, int? statusId, int page, int pageSize);
+//    Task<Field> CreateAsync(Field field);
+//    Task UpdateAsync(Field field);
+//    Task SoftDeleteAsync(int fieldId);
+
+//    Task<List<FieldSlot>> GetScheduleAsync(int? fieldId, DateOnly date);
+//    Task<FieldSlot?> GetSlotByIdAsync(int fieldSlotId);
+//    Task<List<FieldSlot>> GetSlotsByIdsAsync(List<int> fieldSlotIds);
+
+//    Task<List<FieldPriceHistory>> GetPriceHistoryAsync(int fieldId);
+
+//    Task<List<FieldMaintenanceLog>> GetMaintenanceLogsAsync(int fieldId);
+//    Task<FieldMaintenanceLog> AddMaintenanceLogAsync(FieldMaintenanceLog log);
 //}
 
-//public interface IRefreshTokenRepository
+//// ================================================================
+//// Bookings
+//// ================================================================
+
+//public interface IBookingRepository
 //{
-//    // TODO: Task<RefreshToken?> GetActiveTokenAsync(int userId, string token)
-//    // TODO: Task RevokeTokenAsync(string token)
-//    // TODO: Task RevokeAllUserTokensAsync(int userId)
-//    // TODO: Task AddAsync(RefreshToken token)
+//    Task<Booking?> GetByIdAsync(int bookingId);
+//    Task<Booking?> GetWithDetailsAsync(int bookingId);
+//    Task<(List<Booking> Items, int TotalCount)> GetBookingsAsync(
+//        int? userId, int? statusId, DateOnly? dateFrom, DateOnly? dateTo,
+//        int? fieldId, int page, int pageSize);
+//    Task<List<Booking>> GetActiveByUserAsync(int userId);
+//    Task<Booking> CreateAsync(Booking booking);
+//    Task UpdateAsync(Booking booking);
+
+//    Task AddBookingDetailAsync(BookingDetail detail);
+//    Task AddBookingServiceAsync(BookingService service);
+//    Task<List<BookingService>> GetBookingServicesAsync(int bookingId);
 //}
 
-//public interface IFieldRepository : IGenericRepository<Field>
-//{
-//    // TODO: Task<List<Field>> GetActiveFieldsAsync(int? typeId)
-//    // TODO: Task<Field?> GetWithDetailsAsync(int fieldId)
-//    // TODO: Task<List<FieldSlot>> GetSlotsByDateAsync(int? fieldId, DateOnly date)
-//}
-
-//public interface IFieldSlotRepository
-//{
-//    // TODO: Task<FieldSlot?> GetByIdAsync(int fieldSlotId)
-//    // TODO: Task<List<FieldSlot>> GetByIdsAsync(List<int> ids)
-//    // TODO: Task<List<FieldSlot>> GetExpiredHoldsAsync()
-//    // TODO: Task ReleaseExpiredHoldsAsync()
-//}
-
-//public interface IBookingRepository : IGenericRepository<Booking>
-//{
-//    // TODO: Task<Booking?> GetWithDetailsAsync(int bookingId)
-//    // TODO: Task<(List<Booking> items, int total)> GetPagedAsync(int? userId, int? statusId, DateOnly? from, DateOnly? to, int page, int pageSize)
-//    // TODO: Task<List<Booking>> GetActiveByUserAsync(int userId)
-//    // TODO: Task<int> CountActiveByUserAsync(int userId)
-//}
+//// ================================================================
+//// Payments
+//// ================================================================
 
 //public interface IPaymentRepository
 //{
-//    // TODO: Task<List<Payment>> GetByBookingAsync(int bookingId)
-//    // TODO: Task<Payment?> GetLatestPaidAsync(int bookingId)
-//    // TODO: Task<decimal> GetTotalPaidAsync(int bookingId)
-//    // TODO: Task<Payment> AddAsync(Payment payment)
+//    Task<List<Payment>> GetByBookingAsync(int bookingId);
+//    Task<decimal> GetTotalPaidAsync(int bookingId);
+//    Task<Payment> AddAsync(Payment payment);
 //}
+
+//// ================================================================
+//// Deposits
+//// ================================================================
 
 //public interface IDepositRepository
 //{
-//    // TODO: Task<Deposit?> GetByBookingAsync(int bookingId)
-//    // TODO: Task<List<Deposit>> GetPendingOverdueAsync()
-//    // TODO: Task UpdateAsync(Deposit deposit)
+//    Task<Deposit?> GetByBookingAsync(int bookingId);
+//    Task<Deposit> AddAsync(Deposit deposit);
+//    Task UpdateAsync(Deposit deposit);
 //}
 
-//public interface IPromotionRepository : IGenericRepository<Promotion>
+//// ================================================================
+//// Promotions
+//// ================================================================
+
+//public interface IPromotionRepository
 //{
-//    // TODO: Task<Promotion?> GetActiveByCodeAsync(string code)
-//    // TODO: Task IncrementUsageAsync(int promotionId)
+//    Task<Promotion?> GetByIdAsync(int promotionId);
+//    Task<Promotion?> GetActiveByCodeAsync(string code);
+//    Task<(List<Promotion> Items, int TotalCount)> GetPromotionsAsync(
+//        bool? isActive, int page, int pageSize);
+//    Task<Promotion> CreateAsync(Promotion promotion);
+//    Task UpdateAsync(Promotion promotion);
+//    Task IncrementUsageAsync(int promotionId);
 //}
 
-//public interface IProductRepository : IGenericRepository<Product>
+//// ================================================================
+//// Services
+//// ================================================================
+
+//public interface IServiceRepository
 //{
-//    // TODO: Task<List<Product>> GetLowStockAsync()
-//    // TODO: Task UpdateStockAsync(int productId, int quantityDelta)
+//    Task<Service?> GetByIdAsync(int serviceId);
+//    Task<List<Service>> GetAllAsync(bool? isAvailable = null);
+//    Task<Service> CreateAsync(Service service);
+//    Task UpdateAsync(Service service);
+//    Task SoftDeleteAsync(int serviceId);
 //}
 
-//public interface IIncidentRepository : IGenericRepository<Incident>
+//// ================================================================
+//// Inventory
+//// ================================================================
+
+//public interface ISupplierRepository
 //{
-//    // TODO: Task<(List<Incident> items, int total)> GetPagedAsync(int? fieldId, int? statusId, int page, int pageSize)
+//    Task<Supplier?> GetByIdAsync(int supplierId);
+//    Task<(List<Supplier> Items, int TotalCount)> GetSuppliersAsync(
+//        string? search, int page, int pageSize);
+//    Task<Supplier> CreateAsync(Supplier supplier);
+//    Task UpdateAsync(Supplier supplier);
+//    Task SoftDeleteAsync(int supplierId);
 //}
 
-//public interface IReviewRepository : IGenericRepository<Review>
+//public interface IProductRepository
 //{
-//    // TODO: Task<Review?> GetByBookingAsync(int bookingId)
-//    // TODO: Task<(List<Review> items, int total)> GetByFieldAsync(int fieldId, int page, int pageSize)
+//    Task<Product?> GetByIdAsync(int productId);
+//    Task<(List<Product> Items, int TotalCount)> GetProductsAsync(
+//        string? search, int page, int pageSize);
+//    Task<List<Product>> GetLowStockAsync();
+//    Task<Product> CreateAsync(Product product);
+//    Task UpdateAsync(Product product);
+//    Task SoftDeleteAsync(int productId);
 //}
+
+//public interface IPurchaseOrderRepository
+//{
+//    Task<PurchaseOrder?> GetByIdAsync(int purchaseOrderId);
+//    Task<PurchaseOrder?> GetWithDetailsAsync(int purchaseOrderId);
+//    Task<(List<PurchaseOrder> Items, int TotalCount)> GetPurchaseOrdersAsync(
+//        int? statusId, int page, int pageSize);
+//    Task<PurchaseOrder> CreateAsync(PurchaseOrder order, List<PurchaseOrderDetail> details);
+//    Task UpdateStatusAsync(int purchaseOrderId, int statusId, DateTime? confirmedAt);
+//}
+
+//// ================================================================
+//// Incidents
+//// ================================================================
+
+//public interface IIncidentRepository
+//{
+//    Task<Incident?> GetByIdAsync(int incidentId);
+//    Task<(List<Incident> Items, int TotalCount)> GetIncidentsAsync(
+//        int? fieldId, int? statusId, int page, int pageSize);
+//    Task<Incident> CreateAsync(Incident incident);
+//    Task UpdateAsync(Incident incident);
+//}
+
+//// ================================================================
+//// Reviews
+//// ================================================================
+
+//public interface IReviewRepository
+//{
+//    Task<Review?> GetByIdAsync(int reviewId);
+//    Task<Review?> GetByBookingAsync(int bookingId);
+//    Task<(List<Review> Items, int TotalCount)> GetReviewsAsync(
+//        int? fieldId, int? rating, bool? isVisible, int page, int pageSize);
+//    Task<Review> CreateAsync(Review review);
+//    Task UpdateVisibilityAsync(int reviewId, bool isVisible);
+//}
+
+//// ================================================================
+//// Notifications
+//// ================================================================
 
 //public interface INotificationRepository
 //{
-//    // TODO: Task<(List<Notification> items, int total)> GetByUserAsync(int userId, bool? isRead, int page, int pageSize)
-//    // TODO: Task MarkAsReadAsync(int notificationId)
-//    // TODO: Task MarkAllAsReadAsync(int userId)
-//    // TODO: Task AddAsync(Notification notification)
+//    Task<(List<Notification> Items, int TotalCount)> GetByUserAsync(
+//        int userId, bool? isRead, int page, int pageSize);
+//    Task<int> CountUnreadAsync(int userId);
+//    Task MarkAsReadAsync(int notificationId, int userId);
+//    Task MarkAllAsReadAsync(int userId);
+//    Task<Notification> AddAsync(Notification notification);
 //}
+
+//// ================================================================
+//// System Config
+//// ================================================================
+
+//public interface ISystemConfigRepository
+//{
+//    Task<List<SystemConfig>> GetAllAsync();
+//    Task<SystemConfig?> GetByKeyAsync(string key);
+//    Task UpdateAsync(string key, string value, int updatedBy);
+//}
+
+//// ================================================================
+//// Special Days
+//// ================================================================
+
+//public interface ISpecialDayRepository
+//{
+//    Task<List<SpecialDay>> GetAllAsync();
+//    Task<SpecialDay?> GetByIdAsync(int specialDayId);
+//    Task<SpecialDay?> GetByDateAsync(DateOnly date);
+//    Task<SpecialDay> CreateAsync(SpecialDay specialDay);
+//    Task UpdateAsync(SpecialDay specialDay);
+//    Task DeleteAsync(int specialDayId);
+//}
+
+//// ================================================================
+//// Dashboard
+//// ================================================================
 
 //public interface IDashboardRepository
 //{
-//    // TODO: Dùng Views từ DB (vw_DashboardSummary, vw_RevenueByMonth, ...)
-//    //       hoặc raw SQL / Stored Procedure để lấy dữ liệu báo cáo nhanh
-//    // TODO: Task<DashboardRawData> GetSummaryAsync()
-//    // TODO: Task<List<RevenueRaw>> GetRevenueByMonthAsync(int year)
-//    // TODO: Task<List<OccupancyRaw>> GetOccupancyAsync(int year, int month)
+//    Task<DashboardRaw> GetSummaryAsync();
+//    Task<List<RevenueByMonthRaw>> GetRevenueByMonthAsync(int year);
+//    Task<List<FieldOccupancyRaw>> GetOccupancyAsync(int? year, int? month);
+//    Task<List<RevenueByServiceRaw>> GetRevenueByServiceAsync();
+//}
+
+//// ── Raw models dùng nội bộ (map từ View/SP, không expose ra ngoài) ──
+
+//public class DashboardRaw
+//{
+//    public int PendingBookings { get; set; }
+//    public int PendingDepositBookings { get; set; }
+//    public int TodayConfirmed { get; set; }
+//    public int ActiveFields { get; set; }
+//    public int MaintenanceFields { get; set; }
+//    public int NewIncidents { get; set; }
+//    public decimal TodayRevenue { get; set; }
+//    public int ActiveCustomers { get; set; }
+//    public int LowStockCount { get; set; }
+//    public int UrgentDepositCount { get; set; }
+//}
+
+//public class RevenueByMonthRaw
+//{
+//    public int Year { get; set; }
+//    public int Month { get; set; }
+//    public int TotalBookings { get; set; }
+//    public decimal TotalRevenue { get; set; }
+//    public decimal AvgBookingValue { get; set; }
+//}
+
+//public class FieldOccupancyRaw
+//{
+//    public int FieldId { get; set; }
+//    public string FieldName { get; set; } = string.Empty;
+//    public string FieldType { get; set; } = string.Empty;
+//    public int Year { get; set; }
+//    public int Month { get; set; }
+//    public int TotalSlots { get; set; }
+//    public int BookedSlots { get; set; }
+//    public decimal OccupancyRate { get; set; }
+//}
+
+//public class RevenueByServiceRaw
+//{
+//    public int ServiceId { get; set; }
+//    public string ServiceName { get; set; } = string.Empty;
+//    public int TotalQuantitySold { get; set; }
+//    public decimal TotalRevenue { get; set; }
+//    public int TotalBookings { get; set; }
 //}

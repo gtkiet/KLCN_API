@@ -21,8 +21,7 @@ KLCN_API/
 │   │   ├── Request/
 │   │   │   └── Requests.cs            ← Request DTO
 │   │   └── Response/
-│   │       ├── ApiResponse.cs          ← Wrapper chuẩn + PagedResponse
-│   │       └── Responses.cs           ← Response DTO
+│   │       └── Responses.cs           ← Wrapper chuẩn + PagedResponse + Response DTO
 │   └── Enums/
 │       └── Enums.cs                    ← Enum cho lookup tables
 │
@@ -79,7 +78,7 @@ Khi bắt đầu một phiên mới, gửi kèm:
 
 ```
 Tôi muốn implement AuthController + AuthService + AuthRepository.
-- Gồm các API: Register, Login, RefreshToken, Logout, ChangePassword
+- Gồm các API: Register, Login, RefreshToken, Logout
 - Đã có: Entities.cs, Enums.cs, IServices.cs, IRepositories.cs (gửi kèm)
 - DB dùng SQL Server, bảng Users + RefreshTokens
 - Dùng BCrypt.Net-Next cho password
@@ -163,12 +162,3 @@ Tôi muốn implement AuthController + AuthService + AuthRepository.
 > ⚠️ Swashbuckle 10.x có breaking changes so với 6.x — test build sớm sau khi restore packages.
 
 ---
-
-## Tóm tắt những gì cần sửa trong code
-
-| File | Vấn đề | Hành động |
-|---|---|---|
-| `Program.cs` | `ExceptionFilter` redundant với Middleware | Xóa `options.Filters.Add<ExceptionFilter>()` |
-| `ValidationFilter.cs` | Đang bắt `BusinessException` — không phải nhiệm vụ của nó | Xóa phần `executed.Exception` handling |
-| `Filters/ExceptionFilter.cs` | Redundant hoàn toàn | Có thể xóa file |
-| `appsettings.json` | Secret hardcode | Ổn cho dev, cần User Secrets cho prod |

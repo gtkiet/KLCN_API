@@ -20,8 +20,6 @@ public class AuthService : IAuthService
         _jwt = jwt;
     }
 
-    // ── Register (Customer) ──────────────────────────────────────
-
     public async Task<LoginResponse> RegisterAsync(RegisterRequest request)
     {
         if (await _authRepo.EmailExistsAsync(request.Email.Trim().ToLower()))
@@ -46,8 +44,6 @@ public class AuthService : IAuthService
         return await BuildLoginResponseAsync(created);
     }
 
-    // ── Login ────────────────────────────────────────────────────
-
     public async Task<LoginResponse> LoginAsync(LoginRequest request)
     {
         var user = await _authRepo.GetByEmailAsync(request.Email.Trim().ToLower());
@@ -60,8 +56,6 @@ public class AuthService : IAuthService
 
         return await BuildLoginResponseAsync(user);
     }
-
-    // ── Refresh Token ────────────────────────────────────────────
 
     public async Task<TokenResponse> RefreshTokenAsync(RefreshTokenRequest request)
     {
@@ -89,29 +83,10 @@ public class AuthService : IAuthService
         };
     }
 
-    // ── Logout ───────────────────────────────────────────────────
-
     public async Task LogoutAsync(int userId)
         => await _authRepo.RevokeAllRefreshTokensAsync(userId);
 
-    // ── Change Password ──────────────────────────────────────────
-
-    public async Task ChangePasswordAsync(int userId, ChangePasswordRequest request)
-    {
-        var currentHash = await _authRepo.GetPasswordHashAsync(userId)
-            ?? throw new NotFoundException("Người dùng", userId);
-
-        if (!PasswordHelper.VerifyPassword(request.CurrentPassword, currentHash))
-            throw new BusinessException("Mật khẩu hiện tại không chính xác.", 400);
-
-        var newHash = PasswordHelper.HashPassword(request.NewPassword);
-        await _authRepo.UpdatePasswordAsync(userId, newHash);
-
-        // Thu hồi toàn bộ refresh token → buộc đăng nhập lại trên tất cả thiết bị
-        await _authRepo.RevokeAllRefreshTokensAsync(userId);
-    }
-
-    // ── Private helpers ──────────────────────────────────────────
+    // ── Helpers ──────────────────────────────────────────────────
 
     private async Task<string> IssueRefreshTokenAsync(int userId)
     {
@@ -136,21 +111,21 @@ public class AuthService : IAuthService
             AccessToken = accessToken,
             RefreshToken = refreshToken,
             ExpiresAt = DateTime.UtcNow.AddMinutes(60),
-            User = MapUserResponse(user)
+            User = MapUser(user)
         };
     }
 
-    private static UserResponse MapUserResponse(User user) => new()
+    private static UserResponse MapUser(User u) => new()
     {
-        UserId = user.UserId,
-        FullName = user.FullName,
-        Email = user.Email,
-        Phone = user.Phone,
-        Role = user.Role?.Name ?? string.Empty,
-        RoleId = user.RoleId,
-        Status = user.Status?.Name ?? string.Empty,
-        StatusId = user.StatusId,
-        AvatarUrl = user.Profile?.AvatarUrl,
-        CreatedAt = user.CreatedAt
+        UserId = u.UserId,
+        FullName = u.FullName,
+        Email = u.Email,
+        Phone = u.Phone,
+        Role = u.Role?.Name ?? string.Empty,
+        RoleId = u.RoleId,
+        Status = u.Status?.Name ?? string.Empty,
+        StatusId = u.StatusId,
+        AvatarUrl = u.Profile?.AvatarUrl,
+        CreatedAt = u.CreatedAt
     };
 }

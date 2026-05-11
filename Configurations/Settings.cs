@@ -12,3 +12,12 @@ public class JwtSettings
     public int AccessTokenExpiryMinutes { get; set; } = 60;
     public int RefreshTokenExpiryDays { get; set; } = 30;
 }
+
+// ============================================================
+// Configurations/CorsSettings.cs
+// ============================================================
+
+public class CorsSettings
+{
+    public List<string> AllowedOrigins { get; set; } = [];
+}

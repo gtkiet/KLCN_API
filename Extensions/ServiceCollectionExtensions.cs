@@ -1,4 +1,3 @@
-using System.Text.Json;
 using KLCN_API.Configurations;
 using KLCN_API.Data;
 using KLCN_API.Helpers;
@@ -11,7 +10,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+//using Microsoft.OpenApi.Models; // Không dùng vì phiên bản mới nhất không còn Models
 using System.Text;
+using System.Text.Json;
 
 namespace KLCN_API.Extensions;
 
@@ -41,16 +42,10 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration config)
     {
-        var jwtSection = config.GetSection("JwtSettings");
-
-        if (!jwtSection.Exists())
-            throw new InvalidOperationException(
-                "Khong tim thay JwtSettings trong appsettings.");
-
         var jwtSettings =
-            jwtSection.Get<JwtSettings>()
+            config.GetSection("JwtSettings").Get<JwtSettings>()
             ?? throw new InvalidOperationException(
-                "Khong bind duoc JwtSettings.");
+                "Khong tim thay hoac khong bind duoc JwtSettings.");
 
         if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey))
             throw new InvalidOperationException(
@@ -98,11 +93,10 @@ public static class ServiceCollectionExtensions
                         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                         context.Response.ContentType = "application/json";
 
-                        var response = ApiResponse.Fail(
-                            "Bạn chưa đăng nhập hoặc token không hợp lệ.");
-
                         await context.Response.WriteAsync(
-                            JsonSerializer.Serialize(response, jsonOptions));
+                            JsonSerializer.Serialize(
+                                ApiResponse.Fail("Ban chua dang nhap hoac token khong hop le."),
+                                jsonOptions));
                     },
 
                     OnForbidden = async context =>
@@ -110,11 +104,10 @@ public static class ServiceCollectionExtensions
                         context.Response.StatusCode = StatusCodes.Status403Forbidden;
                         context.Response.ContentType = "application/json";
 
-                        var response = ApiResponse.Fail(
-                            "Bạn không có quyền thực hiện thao tác này.");
-
                         await context.Response.WriteAsync(
-                            JsonSerializer.Serialize(response, jsonOptions));
+                            JsonSerializer.Serialize(
+                                ApiResponse.Fail("Ban khong co quyen thuc hien thao tac nay."),
+                                jsonOptions));
                     }
                 };
             });
@@ -158,6 +151,7 @@ public static class ServiceCollectionExtensions
                 policy.AllowAnyHeader().AllowAnyMethod();
             });
 
+            // Dung cho moi truong dev, khong dung o production
             options.AddPolicy("AllowAll", policy =>
                 policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
         });
@@ -166,11 +160,11 @@ public static class ServiceCollectionExtensions
     }
 
     // ============================================================
-    // SWAGGER + JWT
+    // SWAGGER
     // ============================================================
 
     public static IServiceCollection AddSwaggerWithAuth(
-        this IServiceCollection services)
+    this IServiceCollection services)
     {
         services.AddSwaggerGen(options =>
         {
@@ -211,15 +205,74 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    //public static IServiceCollection AddSwaggerWithAuth(
+    //    this IServiceCollection services)
+    //{
+    //    services.AddSwaggerGen(options =>
+    //    {
+    //        options.SwaggerDoc("v1", new OpenApiInfo
+    //        {
+    //            Title = "SportPlus API",
+    //            Version = "v1",
+    //            Description = "He thong quan ly san bong SportPlus"
+    //        });
+
+    //        // Embed XML doc comment neu co
+    //        var xmlPath = Path.Combine(
+    //            AppContext.BaseDirectory,
+    //            $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml");
+
+    //        if (File.Exists(xmlPath))
+    //            options.IncludeXmlComments(xmlPath);
+
+    //        // Dinh nghia scheme Bearer
+    //        options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    //        {
+    //            Name = "Authorization",
+    //            Type = SecuritySchemeType.Http,
+    //            Scheme = "bearer",
+    //            BearerFormat = "JWT",
+    //            In = ParameterLocation.Header,
+    //            Description = "Nhap JWT access token. Swagger tu them prefix 'Bearer ' cho ban."
+    //        });
+
+    //        // Yeu cau Bearer tren moi request trong Swagger UI
+    //        options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    //        {
+    //            {
+    //                new OpenApiSecurityScheme
+    //                {
+    //                    // Cách này cũ rồi, luôn báo lỗi cái Reference và không tồn tại OpenApiReference
+    //                    Reference = new OpenApiReference
+    //                    {
+    //                        Type = ReferenceType.SecurityScheme,
+    //                        Id   = "Bearer"
+    //                    }
+    //                },
+    //                Array.Empty<string>()
+    //            }
+    //        });
+
+    //        // Tranh trung ten khi co nhieu class cung ten o namespace khac nhau
+    //        options.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
+    //    });
+
+    //    return services;
+    //}
+
     // ============================================================
-    // SERVICES
+    // APPLICATION SERVICES
     // ============================================================
 
     public static IServiceCollection AddApplicationServices(
         this IServiceCollection services)
     {
         services.AddScoped<IAuthService, AuthService>();
-        services.AddScoped<IUserService, UserService>();
+        //services.AddScoped<IUserService, UserService>();
+
+        // Them service moi o day khi implement them chuc nang:
+        // services.AddScoped<IFieldService, FieldService>();
+        // services.AddScoped<IBookingService, BookingService>();
 
         return services;
     }
@@ -232,7 +285,11 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services)
     {
         services.AddScoped<IAuthRepository, AuthRepository>();
-        services.AddScoped<IUserRepository, UserRepository>();
+        //services.AddScoped<IUserRepository, UserRepository>();
+
+        // Them repository moi o day khi implement them chuc nang:
+        // services.AddScoped<IFieldRepository, FieldRepository>();
+        // services.AddScoped<IBookingRepository, BookingRepository>();
 
         return services;
     }
