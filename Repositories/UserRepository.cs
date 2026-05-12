@@ -24,15 +24,17 @@ public class UserRepository : IUserRepository
         var query = _ctx.Users
             .Include(u => u.Role)
             .Include(u => u.Status)
+            .Include(u => u.Profile)
             .Where(u => !u.IsDeleted)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var s = search.Trim().ToLower();
+            var s = search.Trim();
+            // SQL Server mặc định case-insensitive nên không cần ToLower()
             query = query.Where(u =>
-                u.FullName.ToLower().Contains(s) ||
-                u.Email.ToLower().Contains(s) ||
+                u.FullName.Contains(s) ||
+                u.Email.Contains(s) ||
                 u.Phone.Contains(s));
         }
 
@@ -58,7 +60,7 @@ public class UserRepository : IUserRepository
     {
         var user = await _ctx.Users
             .Include(u => u.Profile)
-            .FirstOrDefaultAsync(u => u.UserId == userId);
+            .FirstOrDefaultAsync(u => u.UserId == userId && !u.IsDeleted);
 
         if (user is null) return;
 
@@ -71,6 +73,18 @@ public class UserRepository : IUserRepository
             if (avatarUrl is not null) user.Profile.AvatarUrl = avatarUrl;
             if (dateOfBirth.HasValue) user.Profile.DateOfBirth = dateOfBirth;
             if (address is not null) user.Profile.Address = address;
+        }
+        else if (avatarUrl is not null || dateOfBirth.HasValue || address is not null)
+        {
+            // Profile chưa tồn tại (edge case) — tạo mới
+            user.Profile = new Profile
+            {
+                UserId = userId,
+                AvatarUrl = avatarUrl,
+                DateOfBirth = dateOfBirth,
+                Address = address
+            };
+            await _ctx.Profiles.AddAsync(user.Profile);
         }
 
         await _ctx.SaveChangesAsync();

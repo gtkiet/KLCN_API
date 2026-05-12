@@ -1,4 +1,5 @@
-﻿using KLCN_API.Middleware;
+﻿using KLCN_API.Helpers;
+using KLCN_API.Middleware;
 using KLCN_API.Models.DTOs.Request;
 using KLCN_API.Models.DTOs.Response;
 using KLCN_API.Models.Entities;
@@ -7,6 +8,7 @@ using KLCN_API.Repositories.Interfaces;
 using KLCN_API.Services.Interfaces;
 
 namespace KLCN_API.Services;
+
 
 public class UserService : IUserService
 {
@@ -19,7 +21,7 @@ public class UserService : IUserService
         var user = await _userRepo.GetByIdAsync(userId)
             ?? throw new NotFoundException("Người dùng", userId);
 
-        return MapDetail(user);
+        return UserMapper.ToDetailResponse(user);
     }
 
     public async Task<PagedResponse<UserResponse>> GetUsersAsync(GetUsersRequest request)
@@ -30,7 +32,7 @@ public class UserService : IUserService
 
         return new PagedResponse<UserResponse>
         {
-            Items = items.Select(MapSummary).ToList(),
+            Items = items.Select(UserMapper.ToResponse).ToList(),
             TotalCount = total,
             Page = request.Page,
             PageSize = request.PageSize
@@ -72,39 +74,4 @@ public class UserService : IUserService
 
         await _userRepo.SoftDeleteAsync(userId);
     }
-
-    // ── Mappers ──────────────────────────────────────────────────
-
-    private static UserResponse MapSummary(User u) => new()
-    {
-        UserId = u.UserId,
-        FullName = u.FullName,
-        Email = u.Email,
-        Phone = u.Phone,
-        Role = u.Role?.Name ?? string.Empty,
-        RoleId = u.RoleId,
-        Status = u.Status?.Name ?? string.Empty,
-        StatusId = u.StatusId,
-        AvatarUrl = u.Profile?.AvatarUrl,
-        CreatedAt = u.CreatedAt
-    };
-
-    private static UserDetailResponse MapDetail(User u) => new()
-    {
-        UserId = u.UserId,
-        FullName = u.FullName,
-        Email = u.Email,
-        Phone = u.Phone,
-        Role = u.Role?.Name ?? string.Empty,
-        RoleId = u.RoleId,
-        Status = u.Status?.Name ?? string.Empty,
-        StatusId = u.StatusId,
-        CreatedAt = u.CreatedAt,
-        Profile = u.Profile is null ? null : new ProfileResponse
-        {
-            AvatarUrl = u.Profile.AvatarUrl,
-            DateOfBirth = u.Profile.DateOfBirth,
-            Address = u.Profile.Address
-        }
-    };
 }

@@ -17,12 +17,9 @@ public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
 
-    public UsersController(IUserService userService)
-    {
-        _userService = userService;
-    }
+    public UsersController(IUserService userService) => _userService = userService;
 
-    /// <summary>Lấy danh sách user — Admin và Staff.</summary>
+    /// <summary>Lấy danh sách user có filter + phân trang — Admin và Staff.</summary>
     [HttpGet]
     [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
     [ProducesResponseType(typeof(ApiResponse<PagedResponse<UserResponse>>), 200)]
@@ -47,6 +44,7 @@ public class UsersController : ControllerBase
     [HttpPatch("{userId:int}/lock")]
     [AuthorizeRoles(RoleEnum.Admin)]
     [ProducesResponseType(typeof(ApiResponse), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
     public async Task<IActionResult> Lock(int userId)
     {
@@ -61,6 +59,7 @@ public class UsersController : ControllerBase
     [HttpPatch("{userId:int}/unlock")]
     [AuthorizeRoles(RoleEnum.Admin)]
     [ProducesResponseType(typeof(ApiResponse), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
     public async Task<IActionResult> Unlock(int userId)
     {
@@ -68,10 +67,11 @@ public class UsersController : ControllerBase
         return Ok(ApiResponse.Ok("Mở khóa tài khoản thành công."));
     }
 
-    /// <summary>Xóa mềm user — chỉ Admin.</summary>
+    /// <summary>Xóa mềm user — chỉ Admin. Không thể xóa Admin khác hoặc chính mình.</summary>
     [HttpDelete("{userId:int}")]
     [AuthorizeRoles(RoleEnum.Admin)]
     [ProducesResponseType(typeof(ApiResponse), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
     public async Task<IActionResult> Delete(int userId)
     {

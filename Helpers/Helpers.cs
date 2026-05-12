@@ -416,3 +416,46 @@ public static class PaginationHelper
         };
     }
 }
+
+/// <summary>
+/// Mapper tập trung cho User entity → DTO.
+/// Dùng chung ở AuthService, ProfileService, UserService để tránh lặp code
+/// và đảm bảo mapping nhất quán khi thêm field mới.
+/// </summary>
+public static class UserMapper
+{
+    /// <summary>Map sang UserResponse dùng trong danh sách và trong LoginResponse.</summary>
+    public static UserResponse ToResponse(User u) => new()
+    {
+        UserId = u.UserId,
+        FullName = u.FullName,
+        Email = u.Email,
+        Phone = u.Phone,
+        Role = u.Role?.Name ?? string.Empty,
+        RoleId = u.RoleId,
+        Status = u.Status?.Name ?? string.Empty,
+        StatusId = u.StatusId,
+        AvatarUrl = u.Profile?.AvatarUrl,
+        CreatedAt = u.CreatedAt
+    };
+
+    /// <summary>Map sang UserDetailResponse dùng trong xem chi tiết và profile cá nhân.</summary>
+    public static UserDetailResponse ToDetailResponse(User u) => new()
+    {
+        UserId = u.UserId,
+        FullName = u.FullName,
+        Email = u.Email,
+        Phone = u.Phone,
+        Role = u.Role?.Name ?? string.Empty,
+        RoleId = u.RoleId,
+        Status = u.Status?.Name ?? string.Empty,
+        StatusId = u.StatusId,
+        CreatedAt = u.CreatedAt,
+        Profile = u.Profile is null ? null : new ProfileResponse
+        {
+            AvatarUrl = u.Profile.AvatarUrl,
+            DateOfBirth = u.Profile.DateOfBirth,
+            Address = u.Profile.Address
+        }
+    };
+}

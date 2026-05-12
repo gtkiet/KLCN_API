@@ -1,4 +1,5 @@
-﻿using KLCN_API.Helpers;
+﻿using KLCN_API.Configurations;
+using KLCN_API.Helpers;
 using KLCN_API.Middleware;
 using KLCN_API.Models.DTOs.Request;
 using KLCN_API.Models.DTOs.Response;
@@ -9,29 +10,35 @@ using KLCN_API.Services.Interfaces;
 
 namespace KLCN_API.Services;
 
+
 public class AuthService : IAuthService
 {
     private readonly IAuthRepository _authRepo;
     private readonly JwtHelper _jwt;
+    private readonly JwtSettings _jwtSettings;
 
-    public AuthService(IAuthRepository authRepo, JwtHelper jwt)
+    public AuthService(IAuthRepository authRepo, JwtHelper jwt, JwtSettings jwtSettings)
     {
         _authRepo = authRepo;
         _jwt = jwt;
+        _jwtSettings = jwtSettings;
     }
 
     public async Task<LoginResponse> RegisterAsync(RegisterRequest request)
     {
-        if (await _authRepo.EmailExistsAsync(request.Email.Trim().ToLower()))
+        var email = request.Email.Trim().ToLower();
+        var phone = request.Phone.Trim();
+
+        if (await _authRepo.EmailExistsAsync(email))
             throw new ConflictException("Email đã được sử dụng.");
 
-        if (await _authRepo.PhoneExistsAsync(request.Phone.Trim()))
+        if (await _authRepo.PhoneExistsAsync(phone))
             throw new ConflictException("Số điện thoại đã được sử dụng.");
 
         var user = new User
         {
-            Email = request.Email.Trim().ToLower(),
-            Phone = request.Phone.Trim(),
+            Email = email,
+            Phone = phone,
             FullName = request.FullName.Trim(),
             PasswordHash = PasswordHelper.HashPassword(request.Password),
             RoleId = (int)RoleEnum.Customer,
@@ -59,8 +66,20 @@ public class AuthService : IAuthService
 
     public async Task<TokenResponse> RefreshTokenAsync(RefreshTokenRequest request)
     {
-        var principal = _jwt.GetPrincipalFromExpiredToken(request.AccessToken);
-        var userId = _jwt.GetUserIdFromPrincipal(principal);
+        int userId;
+
+        try
+        {
+            var principal = _jwt.GetPrincipalFromExpiredToken(request.AccessToken);
+            userId = _jwt.GetUserIdFromPrincipal(principal);
+        }
+        catch
+        {
+            throw new UnauthorizedException("Access token không hợp lệ.");
+        }
+
+        if (userId == 0)
+            throw new UnauthorizedException("Access token không hợp lệ.");
 
         var storedToken = await _authRepo.GetRefreshTokenAsync(request.RefreshToken);
 
@@ -79,7 +98,7 @@ public class AuthService : IAuthService
         {
             AccessToken = newAccessToken,
             RefreshToken = newRefreshToken,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(60)
+            ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpiryMinutes)
         };
     }
 
@@ -95,7 +114,7 @@ public class AuthService : IAuthService
         {
             UserId = userId,
             Token = token,
-            ExpiresAt = DateTime.UtcNow.AddDays(30),
+            ExpiresAt = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpiryDays),
             CreatedAt = DateTime.UtcNow
         });
         return token;
@@ -110,22 +129,8 @@ public class AuthService : IAuthService
         {
             AccessToken = accessToken,
             RefreshToken = refreshToken,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(60),
-            User = MapUser(user)
+            ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpiryMinutes),
+            User = UserMapper.ToResponse(user)
         };
     }
-
-    private static UserResponse MapUser(User u) => new()
-    {
-        UserId = u.UserId,
-        FullName = u.FullName,
-        Email = u.Email,
-        Phone = u.Phone,
-        Role = u.Role?.Name ?? string.Empty,
-        RoleId = u.RoleId,
-        Status = u.Status?.Name ?? string.Empty,
-        StatusId = u.StatusId,
-        AvatarUrl = u.Profile?.AvatarUrl,
-        CreatedAt = u.CreatedAt
-    };
 }

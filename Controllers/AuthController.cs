@@ -39,17 +39,17 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>Làm mới access token bằng refresh token.</summary>
-    [HttpPost("refresh")]
+    [HttpPost("refresh-token")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<TokenResponse>), 200)]
     [ProducesResponseType(typeof(ApiResponse), 401)]
-    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
     {
         var result = await _authService.RefreshTokenAsync(request);
         return Ok(ApiResponse<TokenResponse>.Ok(result, "Làm mới token thành công."));
     }
 
-    /// <summary>Đăng xuất — thu hồi toàn bộ refresh token.</summary>
+    /// <summary>Đăng xuất — thu hồi toàn bộ refresh token của user hiện tại.</summary>
     [HttpPost("logout")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponse), 200)]
