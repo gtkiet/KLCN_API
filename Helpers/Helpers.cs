@@ -1,15 +1,16 @@
-﻿using System.Text;
-using System.Data;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.IdentityModel.Tokens.Jwt;
+﻿using KLCN_API.Configurations;
+using KLCN_API.Models.DTOs.Response;
+using KLCN_API.Models.Entities;
+using KLCN_API.Models.Enums;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.IdentityModel.Tokens;
-using KLCN_API.Configurations;
-using KLCN_API.Models.Enums;
-using KLCN_API.Models.Entities;
-using KLCN_API.Models.DTOs.Response;
+using System.Data;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace KLCN_API.Helpers;
 
@@ -22,9 +23,21 @@ public class JwtHelper
         _settings = settings;
     }
 
-    /// <summary>Tạo JWT access token từ thông tin user.</summary>
+    /// <summary>
+    /// Tạo JWT access token từ thông tin user.
+    /// Caller phải đảm bảo user.Role đã được load (Include hoặc eager load),
+    /// nếu không claim role sẽ sai và [AuthorizeRoles] sẽ không hoạt động.
+    /// </summary>
     public string GenerateAccessToken(User user)
     {
+        // Role.Name ("Admin"/"Staff"/"Customer") phải khớp với RoleEnum.ToString()
+        // mà AuthorizeRolesAttribute dùng. Throw sớm thay vì fallback im lặng
+        // sang RoleId (số nguyên) — vì nếu claim role = "1" thì Authorize sẽ fail.
+        if (user.Role is null)
+            throw new InvalidOperationException(
+                $"User {user.UserId} chua load navigation Role. " +
+                "Them Include(u => u.Role) truoc khi goi GenerateAccessToken.");
+
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.SecretKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
@@ -33,7 +46,7 @@ public class JwtHelper
             new(ClaimTypes.NameIdentifier, user.UserId.ToString()),
             new(ClaimTypes.Email,          user.Email),
             new(ClaimTypes.Name,           user.FullName),
-            new(ClaimTypes.Role,           user.Role?.Name ?? user.RoleId.ToString()),
+            new(ClaimTypes.Role,           user.Role.Name),
             new("roleId",                  user.RoleId.ToString()),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
@@ -49,7 +62,7 @@ public class JwtHelper
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    /// <summary>Tạo refresh token ngẫu nhiên (opaque token).</summary>
+    /// <summary>Tạo refresh token ngẫu nhiên (opaque token, 64 bytes).</summary>
     public string GenerateRefreshToken()
     {
         var bytes = RandomNumberGenerator.GetBytes(64);
@@ -58,7 +71,8 @@ public class JwtHelper
 
     /// <summary>
     /// Lấy ClaimsPrincipal từ access token đã hết hạn.
-    /// Dùng khi refresh — token hết hạn nhưng signature vẫn hợp lệ.
+    /// Dùng khi refresh — token hết hạn nhưng signature vẫn phải hợp lệ.
+    /// Throw SecurityTokenException nếu token bị giả mạo hoặc sai algorithm.
     /// </summary>
     public ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
     {
@@ -67,24 +81,36 @@ public class JwtHelper
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateIssuerSigningKey = true,
-            ValidateLifetime = false, // cho phép token hết hạn
+            ValidateLifetime = false, // cho phép token đã hết hạn
             ValidIssuer = _settings.Issuer,
             ValidAudience = _settings.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(
                                            Encoding.UTF8.GetBytes(_settings.SecretKey))
         };
 
-        var handler = new JwtSecurityTokenHandler();
-        var principal = handler.ValidateToken(token, validationParams, out var securityToken);
-
-        if (securityToken is not JwtSecurityToken jwt ||
-            !jwt.Header.Alg.Equals(SecurityAlgorithms.HmacSha256,
-                                    StringComparison.OrdinalIgnoreCase))
+        try
         {
-            throw new SecurityTokenException("Token không hợp lệ.");
-        }
+            var handler = new JwtSecurityTokenHandler();
+            var principal = handler.ValidateToken(token, validationParams, out var securityToken);
 
-        return principal;
+            if (securityToken is not JwtSecurityToken jwt ||
+                !jwt.Header.Alg.Equals(
+                    SecurityAlgorithms.HmacSha256,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new SecurityTokenException("Token khong hop le.");
+            }
+
+            return principal;
+        }
+        catch (SecurityTokenException)
+        {
+            throw; // re-throw để caller xử lý 401
+        }
+        catch (Exception ex)
+        {
+            throw new SecurityTokenException("Token khong the xac thuc.", ex);
+        }
     }
 
     /// <summary>Lấy userId từ claims của expired token (dùng khi refresh).</summary>
@@ -95,30 +121,37 @@ public class JwtHelper
     }
 }
 
+// ── Password ──────────────────────────────────────────────────────
+
 public static class PasswordHelper
 {
     private const int WorkFactor = 12;
 
-    /// <summary>Hash password bằng BCrypt với work factor 12.</summary>
+    /// <summary>Hash password bằng BCrypt với work factor 12 (~300–400ms).</summary>
     public static string HashPassword(string password)
         => BCrypt.Net.BCrypt.HashPassword(password, WorkFactor);
 
-    /// <summary>Kiểm tra password plaintext so với hash đã lưu.</summary>
+    /// <summary>So sánh password plaintext với hash đã lưu.</summary>
     public static bool VerifyPassword(string password, string hash)
         => BCrypt.Net.BCrypt.Verify(password, hash);
 }
 
+// ── Claims ────────────────────────────────────────────────────────
 
 public static class ClaimsHelper
 {
-    /// <summary>Lấy UserId từ JWT claims. Trả về 0 nếu không tìm thấy.</summary>
+    /// <summary>
+    /// Lấy UserId từ JWT claims.
+    /// Trả về 0 nếu claim không tồn tại hoặc không parse được —
+    /// caller nên kiểm tra giá trị trả về trước khi dùng.
+    /// </summary>
     public static int GetUserId(this ClaimsPrincipal principal)
     {
         var claim = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         return int.TryParse(claim, out var id) ? id : 0;
     }
 
-    /// <summary>Lấy tên role (Admin / Staff / Customer).</summary>
+    /// <summary>Lấy tên role ("Admin" / "Staff" / "Customer").</summary>
     public static string GetRole(this ClaimsPrincipal principal)
         => principal.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
 
@@ -133,11 +166,9 @@ public static class ClaimsHelper
     public static string GetEmail(this ClaimsPrincipal principal)
         => principal.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
 
-    /// <summary>Lấy tên đầy đủ từ claims.</summary>
+    /// <summary>Lấy họ tên đầy đủ từ claims.</summary>
     public static string GetFullName(this ClaimsPrincipal principal)
         => principal.FindFirst(ClaimTypes.Name)?.Value ?? string.Empty;
-
-    // ── Role checks ──────────────────────────────────────────────
 
     public static bool IsAdmin(this ClaimsPrincipal principal)
         => principal.GetRoleId() == (int)RoleEnum.Admin;
@@ -152,11 +183,13 @@ public static class ClaimsHelper
         => principal.IsAdmin() || principal.IsStaff();
 }
 
+// ── Stored Procedures ─────────────────────────────────────────────
+
 public static class StoredProcedureHelper
 {
     /// <summary>
-    /// Thực thi Stored Procedure không trả về kết quả (INSERT/UPDATE).
-    /// Ném SqlException với message từ SP nếu SP THROW lỗi.
+    /// Thực thi Stored Procedure không trả về kết quả (INSERT / UPDATE).
+    /// Throw SqlException với message từ SP nếu SP THROW lỗi.
     /// </summary>
     public static async Task ExecuteSpAsync(
         DbContext ctx,
@@ -164,12 +197,17 @@ public static class StoredProcedureHelper
         params SqlParameter[] parameters)
     {
         var paramList = BuildParamString(parameters);
-        var sql = $"EXEC {spName} {paramList}";
+        var sql = string.IsNullOrEmpty(paramList)
+            ? $"EXEC {spName}"
+            : $"EXEC {spName} {paramList}";
+
         await ctx.Database.ExecuteSqlRawAsync(sql, parameters.Cast<object>().ToArray());
     }
 
     /// <summary>
     /// Thực thi SP và đọc kết quả vào List&lt;T&gt; qua DataReader.
+    /// Chỉ tự mở / đóng connection nếu EF chưa mở — tránh đóng connection
+    /// đang được EF quản lý bên trong transaction.
     /// </summary>
     public static async Task<List<T>> QuerySpAsync<T>(
         DbContext ctx,
@@ -180,14 +218,21 @@ public static class StoredProcedureHelper
         var results = new List<T>();
         var conn = ctx.Database.GetDbConnection();
 
+        // Ghi nhớ trạng thái trước khi vào: chỉ đóng nếu chúng ta tự mở.
+        var wasOpen = conn.State == ConnectionState.Open;
+
         try
         {
-            if (conn.State != ConnectionState.Open)
+            if (!wasOpen)
                 await conn.OpenAsync();
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = spName;
             cmd.CommandType = CommandType.StoredProcedure;
+
+            // Gắn transaction hiện tại nếu có (tránh "connection is part of transaction" error)
+            if (ctx.Database.CurrentTransaction is { } efTx)
+                cmd.Transaction = efTx.GetDbTransaction();
 
             foreach (var p in parameters)
                 cmd.Parameters.Add(p);
@@ -198,8 +243,8 @@ public static class StoredProcedureHelper
         }
         finally
         {
-            // EF quản lý connection — chỉ đóng nếu chúng ta tự mở
-            if (conn.State == ConnectionState.Open)
+            // Chỉ đóng nếu chúng ta là người mở
+            if (!wasOpen && conn.State == ConnectionState.Open)
                 await conn.CloseAsync();
         }
 
@@ -208,13 +253,22 @@ public static class StoredProcedureHelper
 
     // ── Factory methods cho các SP thường dùng ──────────────────
 
-    /// <summary>sp_HoldSlots — giữ slot, kiểm tra ràng buộc đặt trước.</summary>
-    public static Task HoldSlotsAsync(DbContext ctx, string fieldSlotIds, int? userId = null)
+    /// <summary>
+    /// sp_HoldSlots — giữ slot, kiểm tra ràng buộc đặt trước.
+    /// Nhận danh sách ID dạng IEnumerable&lt;int&gt;, tự join thành CSV.
+    /// </summary>
+    public static Task HoldSlotsAsync(
+        DbContext ctx, IEnumerable<int> fieldSlotIds, int? userId = null)
+        => HoldSlotsAsync(ctx, string.Join(",", fieldSlotIds), userId);
+
+    /// <summary>Overload nhận CSV string — dùng khi đã có sẵn chuỗi.</summary>
+    public static Task HoldSlotsAsync(
+        DbContext ctx, string fieldSlotIds, int? userId = null)
         => ExecuteSpAsync(ctx, "sp_HoldSlots",
             new SqlParameter("@FieldSlotIds", fieldSlotIds),
             new SqlParameter("@UserId", (object?)userId ?? DBNull.Value));
 
-    /// <summary>sp_ConfirmBooking — xác nhận booking + tính tiền + tạo deposit nếu cần.</summary>
+    /// <summary>sp_ConfirmBooking — xác nhận booking, tính tiền, tạo deposit nếu cần.</summary>
     public static Task ConfirmBookingAsync(
         DbContext ctx, int bookingId, string fieldSlotIds,
         bool isFullPayment = true, int? userId = null)
@@ -224,7 +278,7 @@ public static class StoredProcedureHelper
             new SqlParameter("@IsFullPayment", isFullPayment),
             new SqlParameter("@UserId", (object?)userId ?? DBNull.Value));
 
-    /// <summary>sp_CancelBooking — hủy + hoàn tiền theo policy.</summary>
+    /// <summary>sp_CancelBooking — hủy booking và hoàn tiền theo policy.</summary>
     public static Task CancelBookingAsync(
         DbContext ctx, int bookingId,
         int? userId = null, string? reason = null, bool isAdminOverride = false)
@@ -245,7 +299,7 @@ public static class StoredProcedureHelper
             new SqlParameter("@TransactionCode", (object?)transactionCode ?? DBNull.Value),
             new SqlParameter("@UserId", (object?)userId ?? DBNull.Value));
 
-    /// <summary>sp_RecordFullPayment — thanh toán phần còn lại.</summary>
+    /// <summary>sp_RecordFullPayment — thanh toán phần còn lại sau khi đã cọc.</summary>
     public static Task RecordFullPaymentAsync(
         DbContext ctx, int bookingId, int methodId,
         string? transactionCode = null, int? userId = null)
@@ -255,7 +309,7 @@ public static class StoredProcedureHelper
             new SqlParameter("@TransactionCode", (object?)transactionCode ?? DBNull.Value),
             new SqlParameter("@UserId", (object?)userId ?? DBNull.Value));
 
-    /// <summary>sp_ApplyPromotion — áp dụng voucher vào booking.</summary>
+    /// <summary>sp_ApplyPromotion — áp dụng mã voucher vào booking.</summary>
     public static Task ApplyPromotionAsync(
         DbContext ctx, int bookingId, string code, int? userId = null)
         => ExecuteSpAsync(ctx, "sp_ApplyPromotion",
@@ -271,24 +325,24 @@ public static class StoredProcedureHelper
             new SqlParameter("@NewFieldSlotId", newFieldSlotId),
             new SqlParameter("@UserId", (object?)userId ?? DBNull.Value));
 
-    /// <summary>sp_ConfirmPurchaseOrder — xác nhận đơn nhập kho, cập nhật tồn kho.</summary>
+    /// <summary>sp_ConfirmPurchaseOrder — xác nhận nhập kho, cộng tồn kho.</summary>
     public static Task ConfirmPurchaseOrderAsync(
         DbContext ctx, int purchaseOrderId, int? userId = null)
         => ExecuteSpAsync(ctx, "sp_ConfirmPurchaseOrder",
             new SqlParameter("@PurchaseOrderId", purchaseOrderId),
             new SqlParameter("@UserId", (object?)userId ?? DBNull.Value));
 
-    /// <summary>sp_GenerateSlots — sinh FieldSlots cho khoảng ngày.</summary>
+    /// <summary>sp_GenerateSlots — sinh FieldSlots cho khoảng ngày chỉ định.</summary>
     public static Task GenerateSlotsAsync(DbContext ctx, DateOnly startDate, DateOnly endDate)
         => ExecuteSpAsync(ctx, "sp_GenerateSlots",
             new SqlParameter("@StartDate", startDate.ToDateTime(TimeOnly.MinValue)),
             new SqlParameter("@EndDate", endDate.ToDateTime(TimeOnly.MinValue)));
 
-    /// <summary>sp_ReleaseExpiredSlots — giải phóng slot hết hạn hold + tự hủy deposit quá hạn.</summary>
+    /// <summary>sp_ReleaseExpiredSlots — giải phóng slot hết hạn hold, hủy deposit quá hạn.</summary>
     public static Task ReleaseExpiredSlotsAsync(DbContext ctx)
         => ExecuteSpAsync(ctx, "sp_ReleaseExpiredSlots");
 
-    /// <summary>sp_UpdateSystemConfig — cập nhật cấu hình hệ thống.</summary>
+    /// <summary>sp_UpdateSystemConfig — cập nhật một mục cấu hình hệ thống.</summary>
     public static Task UpdateSystemConfigAsync(
         DbContext ctx, string configKey, string configValue, int? userId = null)
         => ExecuteSpAsync(ctx, "sp_UpdateSystemConfig",
@@ -302,13 +356,15 @@ public static class StoredProcedureHelper
         => string.Join(", ", parameters.Select(p => p.ParameterName));
 }
 
+// ── Pagination ────────────────────────────────────────────────────
+
 public static class PaginationHelper
 {
     public const int DefaultPageSize = 20;
     public const int MaxPageSize = 100;
 
     /// <summary>
-    /// Phân trang IQueryable, thực thi 2 query: Count + dữ liệu trang.
+    /// Phân trang IQueryable — thực thi 2 query: Count và dữ liệu trang.
     /// </summary>
     public static async Task<PagedResponse<T>> ToPagedAsync<T>(
         IQueryable<T> query,

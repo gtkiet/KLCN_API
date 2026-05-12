@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+﻿using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using KLCN_API.Data;
 
@@ -39,14 +39,15 @@ public class ReleaseExpiredSlotsJob : BackgroundService
                 using var scope = _scopeFactory.CreateScope();
                 var ctx = scope.ServiceProvider.GetRequiredService<SportPlusDbContext>();
 
-                await ctx.Database.ExecuteSqlRawAsync(
-                    "EXEC sp_ReleaseExpiredSlots", stoppingToken);
+                // ExecuteSqlRawAsync không có overload nhận CancellationToken —
+                // cancellation được xử lý bởi vòng lặp và Task.Delay phía dưới.
+                await ctx.Database.ExecuteSqlRawAsync("EXEC sp_ReleaseExpiredSlots");
 
                 _logger.LogDebug("sp_ReleaseExpiredSlots executed at {Time}", DateTime.UtcNow);
             }
             catch (OperationCanceledException)
             {
-                break; // shutdown
+                break;
             }
             catch (SqlException ex)
             {
@@ -67,14 +68,14 @@ public class ReleaseExpiredSlotsJob : BackgroundService
 // ── Job 2: Sinh slot hàng ngày lúc 00:01 ────────────────────────
 
 /// <summary>
-/// Chạy lúc 00:01 mỗi ngày, gọi sp_GenerateSlots cho ngày thứ 30 tới.
+/// Chạy lúc 00:01 mỗi ngày (giờ VN), gọi sp_GenerateSlots cho ngày thứ 30 tới.
 /// Đảm bảo luôn có đủ slot trong rolling window 30 ngày.
 /// </summary>
 public class GenerateDailySlotsJob : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<GenerateDailySlotsJob> _logger;
-    private const int DaysAhead = 29; // sinh cho ngày today + 29
+    private const int DaysAhead = 29;
 
     public GenerateDailySlotsJob(
         IServiceScopeFactory scopeFactory,
@@ -91,7 +92,9 @@ public class GenerateDailySlotsJob : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             var delay = GetDelayUntilNextRun();
-            _logger.LogDebug("GenerateDailySlotsJob next run in {Minutes} minutes", delay.TotalMinutes);
+            _logger.LogDebug(
+                "GenerateDailySlotsJob next run in {Minutes:F1} minutes",
+                delay.TotalMinutes);
 
             await Task.Delay(delay, stoppingToken);
 
@@ -104,13 +107,15 @@ public class GenerateDailySlotsJob : BackgroundService
 
                 var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(DaysAhead));
 
+                // sp_GenerateSlots nhận DATE — truyền DateTime với time = 00:00:00,
+                // SQL Server tự cast về DATE.
                 await ctx.Database.ExecuteSqlRawAsync(
                     "EXEC sp_GenerateSlots @StartDate, @EndDate",
                     new SqlParameter("@StartDate", targetDate.ToDateTime(TimeOnly.MinValue)),
                     new SqlParameter("@EndDate", targetDate.ToDateTime(TimeOnly.MinValue)));
 
                 _logger.LogInformation(
-                    "GenerateDailySlotsJob: sinh slot cho ngày {Date}", targetDate);
+                    "GenerateDailySlotsJob: sinh slot cho ngay {Date}", targetDate);
             }
             catch (OperationCanceledException)
             {
@@ -129,18 +134,37 @@ public class GenerateDailySlotsJob : BackgroundService
         _logger.LogInformation("GenerateDailySlotsJob stopped.");
     }
 
-    /// <summary>Tính thời gian chờ đến 00:01 ngày hôm sau (theo giờ UTC+7).</summary>
-    private static TimeSpan GetDelayUntilNextRun()
+    /// <summary>
+    /// Tính thời gian chờ đến 00:01 ngày hôm sau theo giờ VN (UTC+7).
+    /// Fallback về TimeSpan cố định nếu không tìm được timezone.
+    /// </summary>
+    private TimeSpan GetDelayUntilNextRun()
     {
-        // Dùng giờ VN (UTC+7)
-        var vnZone = TimeZoneInfo.FindSystemTimeZoneById(
-            OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh");
+        try
+        {
+            var tzId = OperatingSystem.IsWindows()
+                ? "SE Asia Standard Time"
+                : "Asia/Ho_Chi_Minh";
 
-        var nowVn = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vnZone);
-        var nextRunVn = nowVn.Date.AddDays(1).AddMinutes(1); // 00:01 ngày mai
-        var delay = nextRunVn - nowVn;
+            var vnZone = TimeZoneInfo.FindSystemTimeZoneById(tzId);
+            var nowVn = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vnZone);
+            var nextRun = nowVn.Date.AddDays(1).AddMinutes(1); // 00:01 ngày mai
+            var delay = nextRun - nowVn;
 
-        // Nếu delay âm (lỗi clock) → chờ 24h
-        return delay > TimeSpan.Zero ? delay : TimeSpan.FromHours(24);
+            return delay > TimeSpan.Zero ? delay : TimeSpan.FromHours(24);
+        }
+        catch (Exception ex)
+        {
+            // Không tìm được timezone (môi trường Docker stripped) —
+            // fallback: tính theo UTC+7 offset thủ công.
+            _logger.LogWarning(ex,
+                "Khong tim duoc timezone VN, fallback ve UTC+7 offset thu cong.");
+
+            var nowVn = DateTime.UtcNow.AddHours(7);
+            var nextRun = nowVn.Date.AddDays(1).AddMinutes(1);
+            var delay = nextRun - nowVn;
+
+            return delay > TimeSpan.Zero ? delay : TimeSpan.FromHours(24);
+        }
     }
 }

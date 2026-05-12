@@ -4,7 +4,7 @@ using KLCN_API.Models.DTOs.Response;
 
 namespace KLCN_API.Middleware;
 
-// ── Custom Exceptions ────────────────────────────────────────────
+// ── Custom exceptions ────────────────────────────────────────────
 
 public class BusinessException : Exception
 {
@@ -51,6 +51,11 @@ public class ExceptionHandlingMiddleware
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
 
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     public ExceptionHandlingMiddleware(
         RequestDelegate next,
         ILogger<ExceptionHandlingMiddleware> logger)
@@ -75,55 +80,53 @@ public class ExceptionHandlingMiddleware
     {
         var (statusCode, message, errors) = ex switch
         {
-            // Custom business exceptions
             BusinessException be => (be.StatusCode, be.Message, (List<string>?)null),
-
-            // SQL Server errors từ SP THROW — parse error number
             SqlException sqlex => HandleSqlException(sqlex),
-
-            // Validation — thường từ FluentValidation nếu dùng sau
             ArgumentException ae => (400, ae.Message, (List<string>?)null),
-
-            // Default
             _ => (500, "Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.", (List<string>?)null)
         };
 
-        // Log tất cả lỗi 5xx, log warning cho 4xx
         if (statusCode >= 500)
-            _logger.LogError(ex, "Unhandled exception: {Message}", ex.Message);
+            _logger.LogError(ex, "Unhandled exception at {Path}: {Message}",
+                context.Request.Path, ex.Message);
         else
-            _logger.LogWarning("Handled exception [{Status}]: {Message}", statusCode, ex.Message);
+            _logger.LogWarning("Handled exception [{Status}] at {Path}: {Message}",
+                statusCode, context.Request.Path, ex.Message);
+
+        // Nếu response đã bắt đầu ghi (streaming) thì không thể ghi thêm
+        if (context.Response.HasStarted)
+        {
+            _logger.LogWarning("Response đã started, không thể ghi error response.");
+            return;
+        }
 
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/json";
 
-        var response = ApiResponse.Fail(message, errors);
-        var json = JsonSerializer.Serialize(response, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
-
-        await context.Response.WriteAsync(json);
+        await context.Response.WriteAsync(
+            JsonSerializer.Serialize(ApiResponse.Fail(message, errors), JsonOptions));
     }
 
     /// <summary>
-    /// Map SQL error number sang HTTP status code.
-    /// Các SP dùng THROW với error number 5xxxx để phân loại.
+    /// Map SQL Server error number sang HTTP status.
+    /// SP trong DB dùng THROW 5xxxx để phân loại lỗi business.
     /// </summary>
     private static (int statusCode, string message, List<string>? errors) HandleSqlException(
         SqlException ex)
     {
-        // SP THROW 50001..50099 = business rule violations → 422
-        // SP THROW 50001 = slot không còn khả dụng → 409 Conflict
         return ex.Number switch
         {
+            // Slot / booking conflicts
             50001 => (409, ex.Message, null),   // Slot bị đặt bởi người khác
-            50002 => (409, ex.Message, null),   // Hold hết hạn
-            50003 => (422, ex.Message, null),
-            50004 => (422, ex.Message, null),
-            >= 50000 and < 60000 => (422, ex.Message, null), // Business logic
-            2627 or 2601 => (409, "Dữ liệu bị trùng lặp.", null), // Unique constraint
-            547 => (409, "Vi phạm ràng buộc dữ liệu.", null), // FK
+            50002 => (409, ex.Message, null),   // Hold đã hết hạn
+
+            // Business rule violations từ SP
+            >= 50000 and < 60000 => (422, ex.Message, null),
+
+            // DB constraint violations
+            2627 or 2601 => (409, "Dữ liệu bị trùng lặp.", null),
+            547 => (409, "Vi phạm ràng buộc dữ liệu.", null),
+
             _ => (500, "Lỗi cơ sở dữ liệu.", null)
         };
     }

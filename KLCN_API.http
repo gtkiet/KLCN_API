@@ -1,6 +1,32 @@
-@KLCN_API_HostAddress = http://localhost:5250
+@baseUrl = http://localhost:5250
+@contentType = application/json
 
-GET {{KLCN_API_HostAddress}}/weatherforecast/
-Accept: application/json
+### Đăng ký tài khoản
+POST {{baseUrl}}/api/auth/register
+Content-Type: {{contentType}}
 
-###
+{
+  "email": "test@sportplus.vn",
+  "phone": "0901234567",
+  "password": "123456",
+  "fullName": "Nguyen Van Test"
+}
+
+### Đăng nhập
+POST {{baseUrl}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@sportplus.vn",
+  "password": "123456"
+}
+
+### Refresh token (thay @accessToken và @refreshToken sau khi đăng nhập)
+# @name refresh
+POST {{baseUrl}}/api/auth/refresh-token
+Content-Type: {{contentType}}
+
+{
+  "accessToken": "{{accessToken}}",
+  "refreshToken": "{{refreshToken}}"
+}
