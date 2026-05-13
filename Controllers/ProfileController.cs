@@ -55,17 +55,17 @@ public class ProfileController : ControllerBase
     /// Chỉ nhận JPG, PNG, WebP, tối đa 5MB.
     /// Ảnh cũ sẽ bị xóa khỏi disk.
     /// </summary>
-    //[HttpPut("avatar")]
-    //[ProducesResponseType(typeof(ApiResponse<object>), 200)]
-    //[ProducesResponseType(typeof(ApiResponse), 400)]
-    //public async Task<IActionResult> UpdateAvatar(IFormFile file)
-    //{
-    //    if (file is null || file.Length == 0)
-    //        throw new BusinessException("Vui lòng chọn file ảnh.", 400);
+    [HttpPut("avatar")]
+    [ProducesResponseType(typeof(ApiResponse<object>), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
+    public async Task<IActionResult> UpdateAvatar(IFormFile file)
+    {
+        if (file is null || file.Length == 0)
+            throw new BusinessException("Vui lòng chọn file ảnh.", 400);
 
-    //    var userId = User.GetUserId();
-    //    var avatarUrl = await _profileService.UpdateAvatarAsync(userId, file);
+        var userId = User.GetUserId();
+        var avatarUrl = await _profileService.UpdateAvatarAsync(userId, file);
 
-    //    return Ok(ApiResponse<object>.Ok(new { avatarUrl }, "Cập nhật avatar thành công."));
-    //}
+        return Ok(ApiResponse<object>.Ok(new { avatarUrl }, "Cập nhật avatar thành công."));
+    }
 }

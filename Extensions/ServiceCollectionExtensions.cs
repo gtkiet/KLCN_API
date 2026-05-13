@@ -2,6 +2,7 @@ using KLCN_API.Configurations;
 using KLCN_API.Data;
 using KLCN_API.Helpers;
 using KLCN_API.Models.DTOs.Response;
+//using KLCN_API.Models.Entities;
 using KLCN_API.Repositories;
 using KLCN_API.Repositories.Interfaces;
 using KLCN_API.Services;
@@ -159,15 +160,31 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    public static IServiceCollection AddVNPaySettings(this IServiceCollection services, IConfiguration config)
+    {
+        // ServiceCollectionExtensions.cs
+        var vnpaySettings = config.GetSection("VNPaySettings").Get<VNPaySettings>()
+            ?? throw new InvalidOperationException("Thieu VNPaySettings.");
+        services.AddSingleton(vnpaySettings);
+        services.AddSingleton<VNPayHelper>();
+
+        return services;
+    }
+
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IProfileService, ProfileService>();
+        services.AddScoped<IFieldService, FieldService>();
+        //services.AddScoped<IBookingService, BookingService>();
+        //services.AddScoped<IPaymentService, PaymentService>();
 
-        // Thêm vào đây khi implement tiếp:
-        // services.AddScoped<IFieldService,   FieldService>();
-        // services.AddScoped<IBookingService, BookingService>();
+        //services.AddScoped<IIncidentService, IncidentService>();
+        //services.AddScoped<IReviewService, ReviewService>();
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<ISystemConfigService, SystemConfigService>();
 
         return services;
     }
@@ -176,10 +193,17 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<IAuthRepository, AuthRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IFieldRepository, FieldRepository>();
+        //services.AddScoped<IBookingRepository, BookingRepository>();
+        //services.AddScoped<IPaymentRepository, PaymentRepository>();
+        //services.AddScoped<IDepositRepository, DepositRepository>();
+        //services.AddScoped<IServiceRepository, ServiceRepository>();
 
-        // Thêm vào đây khi implement tiếp:
-        // services.AddScoped<IFieldRepository,   FieldRepository>();
-        // services.AddScoped<IBookingRepository, BookingRepository>();
+        //services.AddScoped<IIncidentRepository, IncidentRepository>();
+        //services.AddScoped<IReviewRepository, ReviewRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<IDashboardRepository, DashboardRepository>();
+        services.AddScoped<ISystemConfigRepository, SystemConfigRepository>();
 
         return services;
     }

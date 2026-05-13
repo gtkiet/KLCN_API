@@ -32,24 +32,31 @@ builder.Services.AddHostedService<GenerateDailySlotsJob>();
 var app = builder.Build();
 
 // Phải là middleware đầu tiên để bắt mọi exception từ các middleware sau
-app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseMiddleware<Middleware>();
 
 // Swagger chỉ expose ở môi trường Development
-if (app.Environment.IsDevelopment())
+//if (app.Environment.IsDevelopment())
+//{
+//    app.UseSwagger();
+//    app.UseSwaggerUI(options =>
+//    {
+//        options.SwaggerEndpoint("/swagger/v1/swagger.json", "SportPlus API V1");
+//        options.RoutePrefix = "";           // Swagger UI ở / thay vì /swagger
+//        options.EnablePersistAuthorization();
+//    });
+//}
+app.UseSwagger();
+app.UseSwaggerUI(options =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "SportPlus API V1");
-        options.RoutePrefix = "";           // Swagger UI ở / thay vì /swagger
-        options.EnablePersistAuthorization();
-    });
-}
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "SportPlus API V1");
+    options.RoutePrefix = "";           // Swagger UI ở / thay vì /swagger
+    options.EnablePersistAuthorization();
+});
 
 app.UseHttpsRedirection();
 
 // File tĩnh mặc định (wwwroot)
-app.UseStaticFiles();
+//app.UseStaticFiles();
 
 // File upload — dùng ContentRootPath thay vì GetParent(GetCurrentDirectory())
 // để path nhất quán cả khi chạy dev, dotnet run, và sau khi publish.

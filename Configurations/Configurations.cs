@@ -13,3 +13,12 @@ public class CorsSettings
 {
     public List<string> AllowedOrigins { get; set; } = [];
 }
+
+public class VNPaySettings
+{
+    public string TmnCode { get; set; } = null!;
+    public string HashSecret { get; set; } = null!;
+    public string BaseUrl { get; set; } = null!;
+    public string ReturnUrl { get; set; } = null!;
+    public string IpnUrl { get; set; } = null!;
+}

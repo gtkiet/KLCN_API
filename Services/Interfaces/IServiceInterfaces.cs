@@ -37,6 +37,7 @@ public interface IProfileService
     Task<UserDetailResponse> GetProfileAsync(int userId);
     Task<UserDetailResponse> UpdateProfileAsync(int userId, UpdateProfileRequest request);
     Task ChangePasswordAsync(int userId, ChangePasswordRequest request);
+    Task<string> UpdateAvatarAsync(int userId, IFormFile file);
 }
 
 // ================================================================
@@ -55,6 +56,8 @@ public interface IFieldService
     Task GenerateSlotsAsync(GenerateSlotsRequest request);
 
     Task<List<FieldPriceHistoryResponse>> GetPriceHistoryAsync(int fieldId);
+
+    Task<List<FieldMaintenanceLogResponse>> GetMaintenanceLogsAsync(int fieldId);
     Task AddMaintenanceLogAsync(int fieldId, int createdBy, CreateMaintenanceRequest request);
 }
 
@@ -84,6 +87,8 @@ public interface IPaymentService
     Task RecordFullPaymentAsync(int bookingId, ConfirmPaymentRequest request, int userId);
     Task<List<PaymentResponse>> GetPaymentsByBookingAsync(int bookingId);
     Task<DepositResponse?> GetDepositByBookingAsync(int bookingId);
+    Task RecordOnlinePaymentAsync(
+        int bookingId, decimal amount, int methodId, string transactionCode);
 }
 
 // ================================================================

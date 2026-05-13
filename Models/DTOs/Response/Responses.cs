@@ -152,6 +152,18 @@ public class FieldPriceHistoryResponse
     public string? Reason { get; set; }
 }
 
+public class FieldMaintenanceLogResponse
+{
+    public int LogId { get; set; }
+    public int FieldId { get; set; }
+    public string FieldName { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public DateOnly StartDate { get; set; }
+    public DateOnly? EndDate { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+}
+
 // ================================================================
 // Bookings
 // ================================================================

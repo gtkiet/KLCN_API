@@ -179,6 +179,16 @@ public interface IIncidentRepository
 // Reviews
 // ================================================================
 
+//public interface IReviewRepository
+//{
+//    Task<Review?> GetByIdAsync(int reviewId);
+//    Task<Review?> GetByBookingAsync(int bookingId);
+//    Task<(List<Review> Items, int TotalCount)> GetReviewsAsync(
+//        int? fieldId, int? rating, bool? isVisible, int page, int pageSize);
+//    Task<Review> CreateAsync(Review review);
+//    Task UpdateVisibilityAsync(int reviewId, bool isVisible);
+//}
+
 public interface IReviewRepository
 {
     Task<Review?> GetByIdAsync(int reviewId);
@@ -187,7 +197,23 @@ public interface IReviewRepository
         int? fieldId, int? rating, bool? isVisible, int page, int pageSize);
     Task<Review> CreateAsync(Review review);
     Task UpdateVisibilityAsync(int reviewId, bool isVisible);
+    Task<FieldRatingRaw?> GetFieldRatingRawAsync(int fieldId);
 }
+
+public class FieldRatingRaw
+{
+    public int FieldId { get; set; }
+    public string FieldName { get; set; } = string.Empty;
+    public string FieldType { get; set; } = string.Empty;
+    public int TotalReviews { get; set; }
+    public decimal AvgRating { get; set; }
+    public int Stars5 { get; set; }
+    public int Stars4 { get; set; }
+    public int Stars3 { get; set; }
+    public int Stars2 { get; set; }
+    public int Stars1 { get; set; }
+}
+
 
 // ================================================================
 // Notifications
@@ -276,7 +302,6 @@ public class FieldOccupancyRaw
     public int BookedSlots { get; set; }
     public decimal OccupancyRate { get; set; }
 }
-
 public class RevenueByServiceRaw
 {
     public int ServiceId { get; set; }

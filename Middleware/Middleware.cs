@@ -46,19 +46,19 @@ public class ConflictException : BusinessException
 
 // ── Middleware ───────────────────────────────────────────────────
 
-public class ExceptionHandlingMiddleware
+public class Middleware
 {
     private readonly RequestDelegate _next;
-    private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+    private readonly ILogger<Middleware> _logger;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public ExceptionHandlingMiddleware(
+    public Middleware(
         RequestDelegate next,
-        ILogger<ExceptionHandlingMiddleware> logger)
+        ILogger<Middleware> logger)
     {
         _next = next;
         _logger = logger;

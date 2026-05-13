@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.IdentityModel.Tokens;
 using System.Data;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -457,5 +458,193 @@ public static class UserMapper
             DateOfBirth = u.Profile.DateOfBirth,
             Address = u.Profile.Address
         }
+    };
+}
+
+/// <summary>
+/// Mapper tập trung cho Field entity → DTO.
+/// Dùng chung cho FieldService để tránh lặp code.
+/// </summary>
+public static class FieldMapper
+{
+    public static FieldResponse ToResponse(Field f) => new()
+    {
+        FieldId = f.FieldId,
+        Name = f.Name,
+        Description = f.Description,
+        BasePrice = f.BasePrice,
+        PeakPrice = f.PeakPrice,
+        ImageUrl = f.ImageUrl,
+        FieldType = f.Type?.Name ?? string.Empty,
+        TypeId = f.TypeId,
+        Status = f.Status?.Name ?? string.Empty,
+        StatusId = f.StatusId,
+        CreatedAt = f.CreatedAt
+    };
+
+    public static SlotResponse ToSlotResponse(FieldSlot fs) => new()
+    {
+        FieldSlotId = fs.FieldSlotId,
+        SlotId = fs.SlotId,
+        StartTime = fs.TimeSlot.StartTime,
+        EndTime = fs.TimeSlot.EndTime,
+        Price = fs.Price,
+        IsPeakHour = fs.TimeSlot.IsPeakHour,
+        Status = fs.Status?.Name ?? string.Empty,
+        StatusId = fs.StatusId,
+        HoldRemainingSeconds = fs.StatusId == 2 && fs.HoldExpireAt > DateTime.UtcNow
+            ? (int)(fs.HoldExpireAt!.Value - DateTime.UtcNow).TotalSeconds
+            : null
+    };
+}
+
+public class VNPayHelper
+{
+    private readonly VNPaySettings _settings;
+
+    public VNPayHelper(VNPaySettings settings) => _settings = settings;
+
+    /// <summary>Tạo URL thanh toán VNPay.</summary>
+    public string CreatePaymentUrl(
+        int bookingId, decimal amount, string orderInfo, string ipAddress)
+    {
+        var txnRef = $"{bookingId}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+        var vnpay = new SortedDictionary<string, string>
+        {
+            ["vnp_Version"] = "2.1.0",
+            ["vnp_Command"] = "pay",
+            ["vnp_TmnCode"] = _settings.TmnCode,
+            ["vnp_Amount"] = ((long)(amount * 100)).ToString(), // VNPay tính theo đồng
+            ["vnp_CurrCode"] = "VND",
+            ["vnp_TxnRef"] = txnRef,
+            ["vnp_OrderInfo"] = orderInfo,
+            ["vnp_OrderType"] = "other",
+            ["vnp_Locale"] = "vn",
+            ["vnp_ReturnUrl"] = _settings.ReturnUrl,
+            ["vnp_IpAddr"] = ipAddress,
+            ["vnp_CreateDate"] = DateTime.Now.ToString("yyyyMMddHHmmss"),
+            ["vnp_ExpireDate"] = DateTime.Now.AddMinutes(15).ToString("yyyyMMddHHmmss"),
+        };
+
+        var query = string.Join("&", vnpay.Select(kv =>
+            $"{kv.Key}={WebUtility.UrlEncode(kv.Value)}"));
+        var signature = HmacSha512(_settings.HashSecret, query);
+
+        return $"{_settings.BaseUrl}?{query}&vnp_SecureHash={signature}";
+    }
+
+    /// <summary>
+    /// Xác minh chữ ký IPN/Return từ VNPay.
+    /// Trả true nếu hợp lệ.
+    /// </summary>
+    public bool ValidateSignature(IQueryCollection query, out string txnRef, out bool isSuccess)
+    {
+        txnRef = query["vnp_TxnRef"].ToString();
+        isSuccess = query["vnp_ResponseCode"] == "00";
+
+        var receivedHash = query["vnp_SecureHash"].ToString();
+
+        // Lấy tất cả param trừ vnp_SecureHash, sắp xếp và hash lại
+        var filtered = query
+            .Where(kv => kv.Key != "vnp_SecureHash" && kv.Key != "vnp_SecureHashType")
+            .OrderBy(kv => kv.Key)
+            .Select(kv => $"{kv.Key}={WebUtility.UrlEncode(kv.Value)}");
+
+        var data = string.Join("&", filtered);
+        var expectedHash = HmacSha512(_settings.HashSecret, data);
+
+        return string.Equals(expectedHash, receivedHash, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string HmacSha512(string key, string data)
+    {
+        var keyBytes = Encoding.UTF8.GetBytes(key);
+        var dataBytes = Encoding.UTF8.GetBytes(data);
+        using var hmac = new HMACSHA512(keyBytes);
+        return Convert.ToHexString(hmac.ComputeHash(dataBytes)).ToLower();
+    }
+}
+
+/// <summary>
+/// Mapper tập trung cho Notification entity → DTO.
+/// Dùng chung ở NotificationService để tránh lặp code.
+/// </summary>
+public static class NotificationMapper
+{
+    public static NotificationResponse ToResponse(Notification n) => new()
+    {
+        NotificationId = n.NotificationId,
+        Title = n.Title,
+        Body = n.Body,
+        Type = n.Type,
+        RefId = n.RefId,
+        IsRead = n.IsRead,
+        CreatedAt = n.CreatedAt
+    };
+}
+
+/// <summary>
+/// Mapper tập trung cho SystemConfig entity → DTO.
+/// Dùng chung ở SystemConfigService để tránh lặp code.
+/// </summary>
+public static class SystemConfigMapper
+{
+    public static SystemConfigResponse ToResponse(SystemConfig c) => new()
+    {
+        ConfigKey = c.ConfigKey,
+        ConfigValue = c.ConfigValue,
+        DataType = c.DataType,
+        Description = c.Description,
+        UpdatedAt = c.UpdatedAt,
+        // UpdatedByUser có thể null nếu chưa ai chỉnh sửa
+        UpdatedBy = c.UpdatedByUser?.FullName
+    };
+}
+
+
+/// <summary>
+/// Mapper tập trung cho Incident entity → DTO.
+/// Dùng chung ở IncidentService để tránh lặp code.
+/// </summary>
+public static class IncidentMapper
+{
+    public static IncidentResponse ToResponse(Incident i) => new()
+    {
+        IncidentId = i.IncidentId,
+        FieldId = i.FieldId,
+        FieldName = i.Field?.Name ?? string.Empty,
+        ReportedBy = i.ReportedByUser?.FullName ?? string.Empty,
+        Title = i.Title,
+        Description = i.Description,
+        ImageUrl = i.ImageUrl,
+        Status = i.Status?.Name ?? string.Empty,
+        StatusId = i.StatusId,
+        HandledBy = i.HandledByUser?.FullName,
+        HandledAt = i.HandledAt,
+        HandledNote = i.HandledNote,
+        CreatedAt = i.CreatedAt
+    };
+}
+
+/// <summary>
+/// Mapper tập trung cho Review entity → DTO.
+/// Dùng chung ở ReviewService để tránh lặp code.
+/// </summary>
+public static class ReviewMapper
+{
+    public static ReviewResponse ToResponse(Review r) => new()
+    {
+        ReviewId = r.ReviewId,
+        BookingId = r.BookingId,
+        UserId = r.UserId,
+        UserName = r.User?.FullName ?? string.Empty,
+        AvatarUrl = r.User?.Profile?.AvatarUrl,
+        FieldId = r.FieldId,
+        FieldName = r.Field?.Name ?? string.Empty,
+        Rating = r.Rating,
+        Comment = r.Comment,
+        ImageUrl = r.ImageUrl,
+        IsVisible = r.IsVisible,
+        CreatedAt = r.CreatedAt
     };
 }
