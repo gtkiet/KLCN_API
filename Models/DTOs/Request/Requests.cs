@@ -241,6 +241,12 @@ public class GetBookingsRequest
 // ================================================================
 // Promotions
 // ================================================================
+public class GetPromotionRequest
+{
+    public bool? isActive { get; set; }
+    public int Page { get; set; } = 1;
+    [Range(1, 100)] public int PageSize { get; set; } = 20;
+}
 
 public class CreatePromotionRequest
 {

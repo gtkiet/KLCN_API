@@ -85,7 +85,7 @@ public interface IBookingService
 
 public interface IPaymentService
 {
-    Task RecordDepositAsync(int bookingId, RecordDepositRequest request, int userId);
+    //Task RecordDepositAsync(int bookingId, RecordDepositRequest request, int userId);
     Task RecordFullPaymentAsync(int bookingId, ConfirmPaymentRequest request, int userId);
     Task<List<PaymentResponse>> GetPaymentsByBookingAsync(int bookingId);
     Task<DepositResponse?> GetDepositByBookingAsync(int bookingId);
@@ -100,12 +100,13 @@ public interface IPaymentService
 
 public interface IPromotionService
 {
-    Task<PagedResponse<PromotionResponse>> GetPromotionsAsync(
-        bool? isActive, int page, int pageSize);
+    Task<PagedResponse<PromotionResponse>> GetPromotionsAsync(GetPromotionRequest request);
     Task<PromotionResponse> GetByIdAsync(int promotionId);
     Task<PromotionResponse> GetByCodeAsync(string code);
+    //Task<PromotionResponse> CreateAsync(CreatePromotionRequest request);
     Task<PromotionResponse> CreateAsync(int adminId, CreatePromotionRequest request);
     Task<PromotionResponse> UpdateAsync(int promotionId, UpdatePromotionRequest request);
+    //Task<PromotionResponse> UpdateAsync(int promotionId, CreatePromotionRequest request);
     Task ToggleActiveAsync(int promotionId);
 }
 
