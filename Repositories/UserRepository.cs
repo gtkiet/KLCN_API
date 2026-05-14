@@ -18,6 +18,20 @@ public class UserRepository : IUserRepository
             .Include(u => u.Profile)
             .FirstOrDefaultAsync(u => u.UserId == userId && !u.IsDeleted);
 
+    public async Task<User?> GetByEmailAsync(string email)
+        => await _ctx.Users
+            .Include(u => u.Role)
+            .Include(u => u.Status)
+            .Include(u => u.Profile)
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower() && !u.IsDeleted);
+
+    public async Task<User?> GetByPhoneAsync(string phone)
+    => await _ctx.Users
+        .Include(u => u.Role)
+        .Include(u => u.Status)
+        .Include(u => u.Profile)
+        .FirstOrDefaultAsync(u => u.Phone == phone && !u.IsDeleted);
+
     public async Task<(List<User> Items, int TotalCount)> GetUsersAsync(
         string? search, int? roleId, int? statusId, int page, int pageSize)
     {
@@ -31,7 +45,6 @@ public class UserRepository : IUserRepository
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim();
-            // SQL Server mặc định case-insensitive nên không cần ToLower()
             query = query.Where(u =>
                 u.FullName.Contains(s) ||
                 u.Email.Contains(s) ||
@@ -55,6 +68,18 @@ public class UserRepository : IUserRepository
         return (items, totalCount);
     }
 
+    public async Task CreateAsync(User user)
+    {
+        _ctx.Users.Add(user);
+        await _ctx.SaveChangesAsync();
+    }
+
+    public async Task UpdateAsync(User user)
+    {
+        _ctx.Users.Update(user);
+        await _ctx.SaveChangesAsync();
+    }
+
     public async Task UpdateProfileAsync(int userId, string? fullName, string? phone,
         string? avatarUrl, DateOnly? dateOfBirth, string? address)
     {
@@ -76,7 +101,6 @@ public class UserRepository : IUserRepository
         }
         else if (avatarUrl is not null || dateOfBirth.HasValue || address is not null)
         {
-            // Profile chưa tồn tại (edge case) — tạo mới
             user.Profile = new Profile
             {
                 UserId = userId,

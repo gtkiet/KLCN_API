@@ -25,10 +25,18 @@ public interface IAuthRepository
 public interface IUserRepository
 {
     Task<User?> GetByIdAsync(int userId);
+    Task<User?> GetByEmailAsync(string email);
+
+    Task<User?> GetByPhoneAsync(string phone);
     Task<(List<User> Items, int TotalCount)> GetUsersAsync(
         string? search, int? roleId, int? statusId, int page, int pageSize);
+
+    Task CreateAsync(User user);
+    Task UpdateAsync(User user);
+
     Task UpdateProfileAsync(int userId, string? fullName, string? phone,
         string? avatarUrl, DateOnly? dateOfBirth, string? address);
+
     Task UpdateStatusAsync(int userId, int statusId);
     Task SoftDeleteAsync(int userId);
     Task UpdatePasswordAsync(int userId, string newPasswordHash);

@@ -23,6 +23,11 @@ public interface IUserService
 {
     Task<UserDetailResponse> GetByIdAsync(int userId);
     Task<PagedResponse<UserResponse>> GetUsersAsync(GetUsersRequest request);
+
+    Task<UserDetailResponse> CreateStaffAsync(CreateStaffRequest request);
+    Task<UserDetailResponse> CreateCustomerByAdminAsync(CreateCustomerByAdminRequest request);
+    Task<UserDetailResponse> UpdateUserAsync(int userId, UpdateUserRequest request);
+
     Task LockUserAsync(int userId);
     Task UnlockUserAsync(int userId);
     Task DeleteUserAsync(int userId);

@@ -1,4 +1,5 @@
-﻿using KLCN_API.Helpers;
+﻿using BCrypt.Net;
+using KLCN_API.Helpers;
 using KLCN_API.Middleware;
 using KLCN_API.Models.DTOs.Request;
 using KLCN_API.Models.DTOs.Response;
@@ -8,7 +9,6 @@ using KLCN_API.Repositories.Interfaces;
 using KLCN_API.Services.Interfaces;
 
 namespace KLCN_API.Services;
-
 
 public class UserService : IUserService
 {
@@ -37,6 +37,89 @@ public class UserService : IUserService
             Page = request.Page,
             PageSize = request.PageSize
         };
+    }
+
+    public async Task<UserDetailResponse> CreateStaffAsync(CreateStaffRequest request)
+    {
+        var existed = await _userRepo.GetByEmailAsync(request.Email);
+        if (existed != null)
+            throw new BusinessException("Email đã tồn tại trong hệ thống.", 400);
+
+        var existedPhone = await _userRepo.GetByPhoneAsync(request.Phone);
+        if (existedPhone != null)
+            throw new BusinessException("Số điện thoại đã tồn tại trong hệ thống.", 400);
+
+        var user = new User
+        {
+            FullName = request.FullName,
+            Email = request.Email.Trim().ToLower(),
+            Phone = request.Phone,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            RoleId = (int)RoleEnum.Staff,
+            StatusId = request.StatusId <= 0 ? (int)UserStatusEnum.Active : request.StatusId,
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = false
+        };
+
+        await _userRepo.CreateAsync(user);
+
+        var created = await _userRepo.GetByIdAsync(user.UserId)
+            ?? throw new NotFoundException("Người dùng", user.UserId);
+
+        return UserMapper.ToDetailResponse(created);
+    }
+
+    public async Task<UserDetailResponse> CreateCustomerByAdminAsync(CreateCustomerByAdminRequest request)
+    {
+        var existed = await _userRepo.GetByEmailAsync(request.Email);
+        if (existed != null)
+            throw new BusinessException("Email đã tồn tại trong hệ thống.", 400);
+
+        var user = new User
+        {
+            FullName = request.FullName,
+            Email = request.Email.Trim().ToLower(),
+            Phone = request.Phone,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            RoleId = (int)RoleEnum.Customer,
+            StatusId = request.StatusId <= 0 ? (int)UserStatusEnum.Active : request.StatusId,
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = false
+        };
+
+        await _userRepo.CreateAsync(user);
+
+        var created = await _userRepo.GetByIdAsync(user.UserId)
+            ?? throw new NotFoundException("Người dùng", user.UserId);
+
+        return UserMapper.ToDetailResponse(created);
+    }
+
+    public async Task<UserDetailResponse> UpdateUserAsync(int userId, UpdateUserRequest request)
+    {
+        var user = await _userRepo.GetByIdAsync(userId)
+            ?? throw new NotFoundException("Người dùng", userId);
+
+        var duplicate = await _userRepo.GetByEmailAsync(request.Email);
+        if (duplicate != null && duplicate.UserId != userId)
+            throw new BusinessException("Email đã tồn tại trong hệ thống.", 400);
+
+        var duplicatePhone = await _userRepo.GetByPhoneAsync(request.Phone);
+        if (duplicatePhone != null && duplicatePhone.UserId != userId)
+            throw new BusinessException("Số điện thoại đã tồn tại trong hệ thống.", 400);
+
+        user.FullName = request.FullName;
+        user.Email = request.Email.Trim().ToLower();
+        user.Phone = request.Phone;
+        user.StatusId = request.StatusId <= 0 ? user.StatusId : request.StatusId;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _userRepo.UpdateAsync(user);
+
+        var updated = await _userRepo.GetByIdAsync(userId)
+            ?? throw new NotFoundException("Người dùng", userId);
+
+        return UserMapper.ToDetailResponse(updated);
     }
 
     public async Task LockUserAsync(int userId)
