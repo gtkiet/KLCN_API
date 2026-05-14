@@ -1,3 +1,4 @@
+using KLCN_API.Models.Enums;
 using System.ComponentModel.DataAnnotations;
 
 namespace KLCN_API.Models.DTOs.Request;
@@ -194,10 +195,14 @@ public class BookingServiceItem
 
 /// <summary>
 /// Ghi nhận thanh toán phần còn lại tại quầy — Staff dùng.
-/// MethodId luôn là 1 (Trực tiếp), không expose ra request.
+/// MethodId: 1=Trực tiếp, 2=MoMo, 3=VNPay.
 /// </summary>
 public class ConfirmPaymentRequest
 {
+    [Required(ErrorMessage = "Phương thức thanh toán không được để trống.")]
+    [Range(1, 3, ErrorMessage = "Phương thức thanh toán không hợp lệ.")]
+    public int MethodId { get; set; } = (int)PaymentMethodEnum.Direct;
+
     [MaxLength(100)]
     public string? TransactionCode { get; set; }
 

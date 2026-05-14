@@ -85,12 +85,29 @@ public interface IBookingService
 
 public interface IPaymentService
 {
-    //Task RecordDepositAsync(int bookingId, RecordDepositRequest request, int userId);
-    Task RecordFullPaymentAsync(int bookingId, ConfirmPaymentRequest request, int userId);
-    Task<List<PaymentResponse>> GetPaymentsByBookingAsync(int bookingId);
-    Task<DepositResponse?> GetDepositByBookingAsync(int bookingId);
+    /// <summary>
+    /// Ghi nhận đặt cọc từ IPN callback (MoMo/VNPay).
+    /// Không cần userId vì là server-to-server.
+    /// </summary>
+    Task RecordDepositAsync(
+        int bookingId, decimal amount, int methodId, string transactionCode);
+
+    /// <summary>
+    /// Ghi nhận thanh toán phần còn lại — Staff/Admin.
+    /// MethodId trong request: 1=Trực tiếp, 2=MoMo, 3=VNPay.
+    /// </summary>
+    Task RecordFullPaymentAsync(
+        int bookingId, ConfirmPaymentRequest request, int userId);
+
+    /// <summary>
+    /// Router cho IPN: tự phân loại cọc hay thanh toán còn lại.
+    /// Idempotent.
+    /// </summary>
     Task RecordOnlinePaymentAsync(
         int bookingId, decimal amount, int methodId, string transactionCode);
+
+    Task<List<PaymentResponse>> GetPaymentsByBookingAsync(int bookingId);
+    Task<DepositResponse?> GetDepositByBookingAsync(int bookingId);
     Task<BookingResponse> GetBookingForPaymentAsync(int bookingId);
 }
 
