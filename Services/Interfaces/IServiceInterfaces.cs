@@ -76,10 +76,12 @@ public interface IBookingService
     Task<BookingResponse> CreateBookingAsync(CreateBookingRequest request, int userId);
     Task<BookingResponse> GetByIdAsync(int bookingId, int requesterId, bool isAdminOrStaff);
     Task<PagedResponse<BookingSummaryResponse>> GetBookingsAsync(GetBookingsRequest request);
-    Task<PagedResponse<BookingSummaryResponse>> GetMyBookingsAsync(int userId, int page, int pageSize);
+    Task<PagedResponse<BookingSummaryResponse>> GetMyBookingsAsync(
+        int userId, int? statusId, int page, int pageSize);
     Task CancelAsync(int bookingId, CancelBookingRequest request, int userId, bool isAdminOverride);
     Task RescheduleAsync(int bookingId, RescheduleRequest request, int userId);
     Task ApplyVoucherAsync(int bookingId, ApplyVoucherRequest request, int userId);
+
 }
 
 // ================================================================
@@ -88,12 +90,13 @@ public interface IBookingService
 
 public interface IPaymentService
 {
-    Task RecordDepositAsync(int bookingId, RecordDepositRequest request, int userId);
+    //Task RecordDepositAsync(int bookingId, RecordDepositRequest request, int userId);
     Task RecordFullPaymentAsync(int bookingId, ConfirmPaymentRequest request, int userId);
     Task<List<PaymentResponse>> GetPaymentsByBookingAsync(int bookingId);
     Task<DepositResponse?> GetDepositByBookingAsync(int bookingId);
     Task RecordOnlinePaymentAsync(
         int bookingId, decimal amount, int methodId, string transactionCode);
+    Task<BookingResponse> GetBookingForPaymentAsync(int bookingId);
 }
 
 // ================================================================
@@ -102,10 +105,13 @@ public interface IPaymentService
 
 public interface IPromotionService
 {
-    Task<PagedResponse<PromotionResponse>> GetPromotionsAsync(bool? isActive, int page, int pageSize);
+    Task<PagedResponse<PromotionResponse>> GetPromotionsAsync(GetPromotionRequest request);
     Task<PromotionResponse> GetByIdAsync(int promotionId);
+    Task<PromotionResponse> GetByCodeAsync(string code);
+    //Task<PromotionResponse> CreateAsync(CreatePromotionRequest request);
     Task<PromotionResponse> CreateAsync(int adminId, CreatePromotionRequest request);
     Task<PromotionResponse> UpdateAsync(int promotionId, UpdatePromotionRequest request);
+    //Task<PromotionResponse> UpdateAsync(int promotionId, CreatePromotionRequest request);
     Task ToggleActiveAsync(int promotionId);
 }
 

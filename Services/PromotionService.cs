@@ -17,16 +17,15 @@ public class PromotionService : IPromotionService
 
     public PromotionService(IPromotionRepository promoRepo) => _promoRepo = promoRepo;
 
-    public async Task<PagedResponse<PromotionResponse>> GetPromotionsAsync(
-        bool? isActive, int page, int pageSize)
+    public async Task<PagedResponse<PromotionResponse>> GetPromotionsAsync(GetPromotionRequest request)
     {
-        var (items, total) = await _promoRepo.GetPromotionsAsync(isActive, page, pageSize);
+        var (items, total) = await _promoRepo.GetPromotionsAsync(request.isActive, request.Page, request.PageSize);
         return new PagedResponse<PromotionResponse>
         {
             Items = items.Select(Map).ToList(),
             TotalCount = total,
-            Page = page,
-            PageSize = pageSize
+            Page = request.Page,
+            PageSize = request.PageSize
         };
     }
 
@@ -112,4 +111,16 @@ public class PromotionService : IPromotionService
         IsActive = p.IsActive,
         CreatedAt = p.CreatedAt
     };
+
+    public async Task<PromotionResponse> GetByCodeAsync(string code)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+
+        var promo = await _promoRepo.GetActiveByCodeAsync(code.Trim().ToUpper());
+
+        if (promo is null)
+            throw new NotFoundException("Mã khuyến mãi không tồn tại, đã hết hạn hoặc đã dùng hết.");
+
+        return Map(promo);
+    }
 }

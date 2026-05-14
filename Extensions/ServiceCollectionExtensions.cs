@@ -179,8 +179,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFieldService, FieldService>();
         //services.AddScoped<IBookingService, BookingService>();
         //services.AddScoped<IPaymentService, PaymentService>();
-
-        //services.AddScoped<IIncidentService, IncidentService>();
+        services.AddScoped<IPromotionService, PromotionService>();
+        services.AddScoped<IServiceService, ServiceService>();
+        services.AddScoped<IIncidentService, IncidentService>();
         //services.AddScoped<IReviewService, ReviewService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IDashboardService, DashboardService>();
@@ -196,10 +197,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFieldRepository, FieldRepository>();
         //services.AddScoped<IBookingRepository, BookingRepository>();
         //services.AddScoped<IPaymentRepository, PaymentRepository>();
-        //services.AddScoped<IDepositRepository, DepositRepository>();
-        //services.AddScoped<IServiceRepository, ServiceRepository>();
-
-        //services.AddScoped<IIncidentRepository, IncidentRepository>();
+        services.AddScoped<IPromotionRepository, PromotionRepository>();
+        services.AddScoped<IServiceRepository, ServiceRepository>();
+        services.AddScoped<IIncidentRepository, IncidentRepository>();
         //services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IDashboardRepository, DashboardRepository>();
