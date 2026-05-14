@@ -112,4 +112,16 @@ public class PromotionService : IPromotionService
         IsActive = p.IsActive,
         CreatedAt = p.CreatedAt
     };
+
+    public async Task<PromotionResponse> GetByCodeAsync(string code)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)); // giờ VN
+
+        var promo = await _promoRepo.GetActiveByCodeAsync(code.Trim().ToUpper());
+
+        if (promo is null)
+            throw new NotFoundException("Mã khuyến mãi không tồn tại, đã hết hạn hoặc đã dùng hết.");
+
+        return Map(promo);
+    }
 }

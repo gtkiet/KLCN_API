@@ -208,7 +208,7 @@ public class BookingService : IBookingService
             FieldName = d.FieldSlot.Field?.Name ?? string.Empty,
             FieldType = d.FieldSlot.Field?.Type?.Name ?? string.Empty,
             SlotDate = d.FieldSlot.SlotDate,
-            StartTime = d.FieldSlot.TimeSlot.StartTime,
+            StartTime = d.FieldSlot.TimeSlot.StartTime,  // "TimeSlot" không phải "Slot"
             EndTime = d.FieldSlot.TimeSlot.EndTime,
             Price = d.Price
         }).ToList() ?? [],
@@ -238,7 +238,7 @@ public class BookingService : IBookingService
     {
         var earliest = b.BookingDetails?
             .OrderBy(d => d.FieldSlot.SlotDate)
-            .ThenBy(d => d.FieldSlot.TimeSlot.StartTime)
+            .ThenBy(d => d.FieldSlot.TimeSlot.StartTime)   // "TimeSlot" không phải "Slot"
             .FirstOrDefault();
 
         return new BookingSummaryResponse

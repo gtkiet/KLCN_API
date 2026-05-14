@@ -115,4 +115,16 @@ public class PaymentService : IPaymentService
             await StoredProcedureHelper.RecordFullPaymentAsync(
                 _ctx, bookingId, methodId, transactionCode, userId: null);
     }
+
+    public async Task<BookingResponse> GetBookingForPaymentAsync(int bookingId)
+    {
+        var booking = await _bookingRepo.GetWithDetailsAsync(bookingId)
+            ?? throw new NotFoundException("Booking", bookingId);
+
+        if (booking.StatusId != 2 && booking.StatusId != 5)
+            throw new BusinessException(
+                "Booking không ở trạng thái có thể thanh toán.", 400);
+
+        return BookingMapper.MapDetail(booking);
+    }
 }

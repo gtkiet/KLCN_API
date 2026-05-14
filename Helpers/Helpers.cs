@@ -12,6 +12,7 @@ using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace KLCN_API.Helpers;
 
@@ -498,73 +499,6 @@ public static class FieldMapper
     };
 }
 
-public class VNPayHelper
-{
-    private readonly VNPaySettings _settings;
-
-    public VNPayHelper(VNPaySettings settings) => _settings = settings;
-
-    /// <summary>Tạo URL thanh toán VNPay.</summary>
-    public string CreatePaymentUrl(
-        int bookingId, decimal amount, string orderInfo, string ipAddress)
-    {
-        var txnRef = $"{bookingId}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
-        var vnpay = new SortedDictionary<string, string>
-        {
-            ["vnp_Version"] = "2.1.0",
-            ["vnp_Command"] = "pay",
-            ["vnp_TmnCode"] = _settings.TmnCode,
-            ["vnp_Amount"] = ((long)(amount * 100)).ToString(), // VNPay tính theo đồng
-            ["vnp_CurrCode"] = "VND",
-            ["vnp_TxnRef"] = txnRef,
-            ["vnp_OrderInfo"] = orderInfo,
-            ["vnp_OrderType"] = "other",
-            ["vnp_Locale"] = "vn",
-            ["vnp_ReturnUrl"] = _settings.ReturnUrl,
-            ["vnp_IpAddr"] = ipAddress,
-            ["vnp_CreateDate"] = DateTime.Now.ToString("yyyyMMddHHmmss"),
-            ["vnp_ExpireDate"] = DateTime.Now.AddMinutes(15).ToString("yyyyMMddHHmmss"),
-        };
-
-        var query = string.Join("&", vnpay.Select(kv =>
-            $"{kv.Key}={WebUtility.UrlEncode(kv.Value)}"));
-        var signature = HmacSha512(_settings.HashSecret, query);
-
-        return $"{_settings.BaseUrl}?{query}&vnp_SecureHash={signature}";
-    }
-
-    /// <summary>
-    /// Xác minh chữ ký IPN/Return từ VNPay.
-    /// Trả true nếu hợp lệ.
-    /// </summary>
-    public bool ValidateSignature(IQueryCollection query, out string txnRef, out bool isSuccess)
-    {
-        txnRef = query["vnp_TxnRef"].ToString();
-        isSuccess = query["vnp_ResponseCode"] == "00";
-
-        var receivedHash = query["vnp_SecureHash"].ToString();
-
-        // Lấy tất cả param trừ vnp_SecureHash, sắp xếp và hash lại
-        var filtered = query
-            .Where(kv => kv.Key != "vnp_SecureHash" && kv.Key != "vnp_SecureHashType")
-            .OrderBy(kv => kv.Key)
-            .Select(kv => $"{kv.Key}={WebUtility.UrlEncode(kv.Value)}");
-
-        var data = string.Join("&", filtered);
-        var expectedHash = HmacSha512(_settings.HashSecret, data);
-
-        return string.Equals(expectedHash, receivedHash, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string HmacSha512(string key, string data)
-    {
-        var keyBytes = Encoding.UTF8.GetBytes(key);
-        var dataBytes = Encoding.UTF8.GetBytes(data);
-        using var hmac = new HMACSHA512(keyBytes);
-        return Convert.ToHexString(hmac.ComputeHash(dataBytes)).ToLower();
-    }
-}
-
 /// <summary>
 /// Mapper tập trung cho Notification entity → DTO.
 /// Dùng chung ở NotificationService để tránh lặp code.
@@ -647,4 +581,275 @@ public static class ReviewMapper
         IsVisible = r.IsVisible,
         CreatedAt = r.CreatedAt
     };
+}
+
+
+// ── VNPayHelper ───────────────────────────────────────────────────
+
+public class VNPayHelper
+{
+    private readonly VNPaySettings _settings;
+
+    public VNPayHelper(VNPaySettings settings) => _settings = settings;
+
+    /// <summary>Tạo URL thanh toán VNPay.</summary>
+    public string CreatePaymentUrl(
+        int bookingId, decimal amount, string orderInfo, string ipAddress)
+    {
+        var txnRef = $"{bookingId}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+
+        // SortedDictionary đảm bảo thứ tự key khi build query string
+        var vnpay = new SortedDictionary<string, string>
+        {
+            ["vnp_Version"] = "2.1.0",
+            ["vnp_Command"] = "pay",
+            ["vnp_TmnCode"] = _settings.TmnCode,
+            ["vnp_Amount"] = ((long)(amount * 100)).ToString(), // VNPay tính theo đồng
+            ["vnp_CurrCode"] = "VND",
+            ["vnp_TxnRef"] = txnRef,
+            ["vnp_OrderInfo"] = orderInfo,
+            ["vnp_OrderType"] = "other",
+            ["vnp_Locale"] = "vn",
+            ["vnp_ReturnUrl"] = _settings.ReturnUrl,
+            ["vnp_IpAddr"] = ipAddress,
+            ["vnp_CreateDate"] = DateTime.Now.ToString("yyyyMMddHHmmss"),
+            ["vnp_ExpireDate"] = DateTime.Now.AddMinutes(15).ToString("yyyyMMddHHmmss"),
+        };
+
+        // Build query string và ký — UrlEncode value khi build URL nhưng KHÔNG encode khi hash
+        var rawData = string.Join("&", vnpay.Select(kv => $"{kv.Key}={kv.Value}"));
+        var urlData = string.Join("&", vnpay.Select(kv =>
+            $"{kv.Key}={WebUtility.UrlEncode(kv.Value)}"));
+        var signature = HmacSha512(_settings.HashSecret, rawData);
+
+        return $"{_settings.BaseUrl}?{urlData}&vnp_SecureHash={signature}";
+    }
+
+    /// <summary>
+    /// Xác minh chữ ký IPN/Return từ VNPay.
+    /// IQueryCollection đã decode value → dùng raw value để hash, KHÔNG encode lại.
+    /// </summary>
+    public bool ValidateSignature(
+        IQueryCollection query, out string txnRef, out bool isSuccess)
+    {
+        txnRef = query["vnp_TxnRef"].ToString();
+        isSuccess = query["vnp_ResponseCode"] == "00";
+
+        var receivedHash = query["vnp_SecureHash"].ToString();
+
+        // Lấy tất cả param trừ vnp_SecureHash, sắp xếp theo key, hash raw value
+        var data = string.Join("&", query
+            .Where(kv => kv.Key != "vnp_SecureHash" && kv.Key != "vnp_SecureHashType")
+            .OrderBy(kv => kv.Key)
+            .Select(kv => $"{kv.Key}={kv.Value}"));  // KHÔNG UrlEncode — đã decode rồi
+
+        var expectedHash = HmacSha512(_settings.HashSecret, data);
+        return string.Equals(expectedHash, receivedHash, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string HmacSha512(string key, string data)
+    {
+        using var hmac = new HMACSHA512(Encoding.UTF8.GetBytes(key));
+        return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(data))).ToLower();
+    }
+}
+
+// ── MoMoHelper ────────────────────────────────────────────────────
+
+public class MoMoHelper
+{
+    private readonly MoMoSettings _settings;
+    private readonly IHttpClientFactory _httpFactory;
+
+    public MoMoHelper(MoMoSettings settings, IHttpClientFactory httpFactory)
+    {
+        _settings = settings;
+        _httpFactory = httpFactory;
+    }
+
+    /// <summary>
+    /// Gọi API MoMo để tạo giao dịch.
+    /// Trả về payUrl để redirect khách đến trang thanh toán MoMo.
+    /// </summary>
+    public async Task<string> CreatePaymentAsync(
+        int bookingId, decimal amount, string orderInfo)
+    {
+        var orderId = $"SP_{bookingId}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+        var requestId = Guid.NewGuid().ToString("N");
+        var amountStr = ((long)amount).ToString();
+
+        // Chuỗi ký theo đúng thứ tự field MoMo quy định
+        var rawSignature =
+            $"accessKey={_settings.AccessKey}" +
+            $"&amount={amountStr}" +
+            $"&extraData=" +
+            $"&ipnUrl={_settings.IpnUrl}" +
+            $"&orderId={orderId}" +
+            $"&orderInfo={orderInfo}" +
+            $"&partnerCode={_settings.PartnerCode}" +
+            $"&redirectUrl={_settings.ReturnUrl}" +
+            $"&requestId={requestId}" +
+            $"&requestType={_settings.RequestType}";
+
+        var signature = HmacSha256(_settings.SecretKey, rawSignature);
+
+        var body = new
+        {
+            partnerCode = _settings.PartnerCode,
+            requestId,
+            amount = amountStr,
+            orderId,
+            orderInfo,
+            redirectUrl = _settings.ReturnUrl,
+            ipnUrl = _settings.IpnUrl,
+            requestType = _settings.RequestType,
+            extraData = string.Empty,
+            lang = "vi",
+            signature
+        };
+
+        var client = _httpFactory.CreateClient();
+        var content = new StringContent(
+            JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        var response = await client.PostAsync(_settings.Endpoint, content);
+
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        if (!doc.RootElement.TryGetProperty("payUrl", out var payUrlProp) ||
+            string.IsNullOrEmpty(payUrlProp.GetString()))
+        {
+            var errMsg = doc.RootElement.TryGetProperty("message", out var msg)
+                ? msg.GetString()
+                : "Không lấy được URL thanh toán MoMo.";
+            throw new InvalidOperationException(errMsg);
+        }
+
+        return payUrlProp.GetString()!;
+    }
+
+    /// <summary>
+    /// Xác minh chữ ký IPN từ MoMo.
+    /// MoMo gửi JSON body với field "signature".
+    /// </summary>
+    public bool ValidateIpn(
+        string partnerCode, string orderId, string requestId,
+        string amount, string orderInfo, string orderType,
+        string transId, int resultCode, string message,
+        string payType, string responseTime, string extraData,
+        string receivedSignature)
+    {
+        var rawSignature =
+            $"accessKey={_settings.AccessKey}" +
+            $"&amount={amount}" +
+            $"&extraData={extraData}" +
+            $"&message={message}" +
+            $"&orderId={orderId}" +
+            $"&orderInfo={orderInfo}" +
+            $"&orderType={orderType}" +
+            $"&partnerCode={partnerCode}" +
+            $"&payType={payType}" +
+            $"&requestId={requestId}" +
+            $"&responseTime={responseTime}" +
+            $"&resultCode={resultCode}" +
+            $"&transId={transId}";
+
+        var expected = HmacSha256(_settings.SecretKey, rawSignature);
+        return string.Equals(expected, receivedSignature, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Parse bookingId từ orderId dạng "SP_{bookingId}_{timestamp}".</summary>
+    public static int ParseBookingId(string orderId)
+    {
+        var parts = orderId.Split('_');
+        return parts.Length >= 2 && int.TryParse(parts[1], out var id) ? id : 0;
+    }
+
+    private static string HmacSha256(string key, string data)
+    {
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(key));
+        return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(data))).ToLower();
+    }
+}
+
+/// <summary>
+/// Mapper tập trung cho Booking entity → DTO.
+/// Tách ra để BookingService và PaymentService cùng dùng mà không circular dependency.
+/// </summary>
+public static class BookingMapper
+{
+    public static BookingResponse MapDetail(Booking b) => new()
+    {
+        BookingId = b.BookingId,
+        Customer = UserMapper.ToResponse(b.User),
+        Status = b.Status?.Name ?? string.Empty,
+        StatusId = b.StatusId,
+        SubTotal = b.SubTotal,
+        DiscountAmount = b.DiscountAmount,
+        TaxAmount = b.TaxAmount,
+        TotalAmount = b.TotalAmount,
+        DepositAmount = b.DepositAmount,
+        PromotionCode = b.Promotion?.Code,
+        Note = b.Note,
+        CancelReason = b.CancelReason,
+        RescheduleCount = b.RescheduleCount,
+        CreatedAt = b.CreatedAt,
+        UpdatedAt = b.UpdatedAt,
+        Details = b.BookingDetails?.Select(d => new BookingDetailResponse
+        {
+            BookingDetailId = d.BookingDetailId,
+            FieldId = d.FieldSlot.FieldId,
+            FieldName = d.FieldSlot.Field?.Name ?? string.Empty,
+            FieldType = d.FieldSlot.Field?.Type?.Name ?? string.Empty,
+            SlotDate = d.FieldSlot.SlotDate,
+            StartTime = d.FieldSlot.TimeSlot.StartTime,
+            EndTime = d.FieldSlot.TimeSlot.EndTime,
+            Price = d.Price
+        }).ToList() ?? [],
+        Services = b.BookingServices?.Select(bs => new BookingServiceResponse
+        {
+            ServiceId = bs.ServiceId,
+            ServiceName = bs.Service?.Name ?? string.Empty,
+            Quantity = bs.Quantity,
+            UnitPrice = bs.UnitPrice
+        }).ToList() ?? [],
+        Deposit = b.Deposit is null ? null : new DepositResponse
+        {
+            DepositId = b.Deposit.DepositId,
+            BookingId = b.BookingId,
+            RequiredAmount = b.Deposit.RequiredAmount,
+            PaidAmount = b.Deposit.PaidAmount,
+            Status = b.Deposit.Status?.Name ?? string.Empty,
+            StatusId = b.Deposit.StatusId,
+            DeadlineAt = b.Deposit.DeadlineAt,
+            MinutesLeft = Math.Max(0,
+                (int)(b.Deposit.DeadlineAt - DateTime.UtcNow).TotalMinutes),
+            PaidAt = b.Deposit.PaidAt
+        }
+    };
+
+    public static BookingSummaryResponse MapSummary(Booking b)
+    {
+        var earliest = b.BookingDetails?
+            .OrderBy(d => d.FieldSlot.SlotDate)
+            .ThenBy(d => d.FieldSlot.TimeSlot.StartTime)
+            .FirstOrDefault();
+
+        return new BookingSummaryResponse
+        {
+            BookingId = b.BookingId,
+            CustomerName = b.User?.FullName ?? string.Empty,
+            CustomerPhone = b.User?.Phone ?? string.Empty,
+            Status = b.Status?.Name ?? string.Empty,
+            StatusId = b.StatusId,
+            TotalAmount = b.TotalAmount,
+            SlotCount = b.BookingDetails?.Count ?? 0,
+            EarliestSlotDate = earliest?.FieldSlot.SlotDate,
+            EarliestSlotTime = earliest?.FieldSlot.TimeSlot.StartTime,
+            FieldName = earliest?.FieldSlot.Field?.Name,
+            CreatedAt = b.CreatedAt
+        };
+    }
 }

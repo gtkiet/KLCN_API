@@ -53,7 +53,7 @@ public class RefreshTokenRequest
 
 public class UpdateProfileRequest
 {
-    [MaxLength(100, ErrorMessage = "Họ tên tối đa 100 ký tự.")]
+    [MaxLength(100)]
     public string? FullName { get; set; }
 
     [Phone(ErrorMessage = "Số điện thoại không hợp lệ.")]
@@ -62,7 +62,7 @@ public class UpdateProfileRequest
 
     public DateOnly? DateOfBirth { get; set; }
 
-    [MaxLength(255, ErrorMessage = "Địa chỉ tối đa 255 ký tự.")]
+    [MaxLength(255)]
     public string? Address { get; set; }
 }
 
@@ -91,9 +91,7 @@ public class GetUsersRequest
     public int? RoleId { get; set; }
     public int? StatusId { get; set; }
     public int Page { get; set; } = 1;
-
-    [Range(1, 100, ErrorMessage = "PageSize phải từ 1 đến 100.")]
-    public int PageSize { get; set; } = 20;
+    [Range(1, 100)] public int PageSize { get; set; } = 20;
 }
 
 // ================================================================
@@ -126,26 +124,14 @@ public class CreateFieldRequest
 
 public class UpdateFieldRequest
 {
-    [MaxLength(100)]
-    public string? Name { get; set; }
-
-    [MaxLength(500)]
-    public string? Description { get; set; }
-
-    [Range(1, double.MaxValue, ErrorMessage = "Giá cơ bản phải lớn hơn 0.")]
-    public decimal? BasePrice { get; set; }
-
-    [Range(1, double.MaxValue, ErrorMessage = "Giá cao điểm phải lớn hơn 0.")]
-    public decimal? PeakPrice { get; set; }
-
+    [MaxLength(100)] public string? Name { get; set; }
+    [MaxLength(500)] public string? Description { get; set; }
+    [Range(1, double.MaxValue)] public decimal? BasePrice { get; set; }
+    [Range(1, double.MaxValue)] public decimal? PeakPrice { get; set; }
     public int? TypeId { get; set; }
     public int? StatusId { get; set; }
-
-    [MaxLength(500)]
-    public string? ImageUrl { get; set; }
-
-    [MaxLength(255)]
-    public string? PriceChangeReason { get; set; }
+    [MaxLength(500)] public string? ImageUrl { get; set; }
+    [MaxLength(255)] public string? PriceChangeReason { get; set; }
 }
 
 public class GetFieldsRequest
@@ -154,18 +140,14 @@ public class GetFieldsRequest
     public int? TypeId { get; set; }
     public int? StatusId { get; set; }
     public int Page { get; set; } = 1;
-
-    [Range(1, 100, ErrorMessage = "PageSize phải từ 1 đến 100.")]
-    public int PageSize { get; set; } = 20;
+    [Range(1, 100)] public int PageSize { get; set; } = 20;
 }
 
 public class GetFieldScheduleRequest
 {
     public int? FieldId { get; set; }
-
     [Required(ErrorMessage = "Ngày xem lịch không được để trống.")]
     public DateOnly Date { get; set; }
-
     public int? TypeId { get; set; }
 }
 
@@ -180,6 +162,11 @@ public class HoldSlotsRequest
     public List<int> FieldSlotIds { get; set; } = [];
 }
 
+/// <summary>
+/// Tạo booking. Tất cả booking đều BẮT BUỘC đặt cọc qua MoMo.
+/// Sau khi tạo thành công (StatusId=5 Chờ đặt cọc), client gọi tiếp
+/// POST /api/payments/momo/create/{bookingId} để lấy URL thanh toán cọc.
+/// </summary>
 public class CreateBookingRequest
 {
     [Required]
@@ -193,9 +180,7 @@ public class CreateBookingRequest
 
     [MaxLength(500)]
     public string? Note { get; set; }
-
-    // true = thanh toán ngay, false = đặt cọc trước
-    public bool IsFullPayment { get; set; } = true;
+    // IsFullPayment đã bỏ — luôn tạo deposit, bắt buộc thanh toán cọc qua MoMo
 }
 
 public class BookingServiceItem
@@ -207,29 +192,17 @@ public class BookingServiceItem
     public int Quantity { get; set; } = 1;
 }
 
+/// <summary>
+/// Ghi nhận thanh toán phần còn lại tại quầy — Staff dùng.
+/// MethodId luôn là 1 (Trực tiếp), không expose ra request.
+/// </summary>
 public class ConfirmPaymentRequest
 {
-    [Required]
-    public int MethodId { get; set; }
-
     [MaxLength(100)]
     public string? TransactionCode { get; set; }
 
-    [MaxLength(4000)]
-    public string? GatewayResponse { get; set; }
-}
-
-public class RecordDepositRequest
-{
-    [Required]
-    [Range(1, double.MaxValue, ErrorMessage = "Số tiền cọc phải lớn hơn 0.")]
-    public decimal Amount { get; set; }
-
-    [Required]
-    public int MethodId { get; set; }
-
-    [MaxLength(100)]
-    public string? TransactionCode { get; set; }
+    [MaxLength(500)]
+    public string? Note { get; set; }
 }
 
 public class CancelBookingRequest
@@ -262,9 +235,7 @@ public class GetBookingsRequest
     public DateOnly? DateTo { get; set; }
     public int? FieldId { get; set; }
     public int Page { get; set; } = 1;
-
-    [Range(1, 100, ErrorMessage = "PageSize phải từ 1 đến 100.")]
-    public int PageSize { get; set; } = 20;
+    [Range(1, 100)] public int PageSize { get; set; } = 20;
 }
 
 // ================================================================
@@ -273,48 +244,22 @@ public class GetBookingsRequest
 
 public class CreatePromotionRequest
 {
-    [Required]
-    [MaxLength(50)]
-    public string Code { get; set; } = string.Empty;
-
-    [Required]
-    [MaxLength(200)]
-    public string Name { get; set; } = string.Empty;
-
-    [MaxLength(500)]
-    public string? Description { get; set; }
-
-    [Required]
-    public int TypeId { get; set; }
-
-    [Required]
-    [Range(0.01, double.MaxValue, ErrorMessage = "Giá trị giảm phải lớn hơn 0.")]
-    public decimal DiscountValue { get; set; }
-
-    [Range(0, double.MaxValue)]
-    public decimal? MaxDiscount { get; set; }
-
-    [Range(0, double.MaxValue)]
-    public decimal MinOrderAmount { get; set; } = 0;
-
-    [Range(1, int.MaxValue, ErrorMessage = "Giới hạn sử dụng phải lớn hơn 0.")]
-    public int UsageLimit { get; set; } = 1;
-
-    [Required]
-    public DateOnly StartDate { get; set; }
-
-    [Required]
-    public DateOnly EndDate { get; set; }
+    [Required][MaxLength(50)] public string Code { get; set; } = string.Empty;
+    [Required][MaxLength(200)] public string Name { get; set; } = string.Empty;
+    [MaxLength(500)] public string? Description { get; set; }
+    [Required] public int TypeId { get; set; }
+    [Required][Range(0.01, double.MaxValue)] public decimal DiscountValue { get; set; }
+    [Range(0, double.MaxValue)] public decimal? MaxDiscount { get; set; }
+    [Range(0, double.MaxValue)] public decimal MinOrderAmount { get; set; } = 0;
+    [Range(1, int.MaxValue)] public int UsageLimit { get; set; } = 1;
+    [Required] public DateOnly StartDate { get; set; }
+    [Required] public DateOnly EndDate { get; set; }
 }
 
 public class UpdatePromotionRequest
 {
-    [MaxLength(200)]
-    public string? Name { get; set; }
-
-    [MaxLength(500)]
-    public string? Description { get; set; }
-
+    [MaxLength(200)] public string? Name { get; set; }
+    [MaxLength(500)] public string? Description { get; set; }
     public decimal? DiscountValue { get; set; }
     public decimal? MaxDiscount { get; set; }
     public decimal? MinOrderAmount { get; set; }
@@ -333,32 +278,17 @@ public class CreateServiceRequest
     [Required(ErrorMessage = "Tên dịch vụ không được để trống.")]
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
-
-    [MaxLength(500)]
-    public string? Description { get; set; }
-
-    [Required]
-    [Range(1, double.MaxValue, ErrorMessage = "Giá dịch vụ phải lớn hơn 0.")]
-    public decimal Price { get; set; }
-
-    [MaxLength(500)]
-    public string? ImageUrl { get; set; }
+    [MaxLength(500)] public string? Description { get; set; }
+    [Required][Range(1, double.MaxValue)] public decimal Price { get; set; }
+    [MaxLength(500)] public string? ImageUrl { get; set; }
 }
 
 public class UpdateServiceRequest
 {
-    [MaxLength(100)]
-    public string? Name { get; set; }
-
-    [MaxLength(500)]
-    public string? Description { get; set; }
-
-    [Range(1, double.MaxValue, ErrorMessage = "Giá dịch vụ phải lớn hơn 0.")]
-    public decimal? Price { get; set; }
-
-    [MaxLength(500)]
-    public string? ImageUrl { get; set; }
-
+    [MaxLength(100)] public string? Name { get; set; }
+    [MaxLength(500)] public string? Description { get; set; }
+    [Range(1, double.MaxValue)] public decimal? Price { get; set; }
+    [MaxLength(500)] public string? ImageUrl { get; set; }
     public bool? IsAvailable { get; set; }
 }
 
@@ -369,80 +299,42 @@ public class UpdateServiceRequest
 public class CreateSupplierRequest
 {
     [Required(ErrorMessage = "Tên nhà cung cấp không được để trống.")]
-    [MaxLength(100)]
-    public string Name { get; set; } = string.Empty;
-
-    [MaxLength(100)]
-    public string? ContactName { get; set; }
-
-    [Phone(ErrorMessage = "Số điện thoại không hợp lệ.")]
-    [MaxLength(20)]
-    public string? Phone { get; set; }
-
-    [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
-    [MaxLength(100)]
-    public string? Email { get; set; }
-
-    [MaxLength(255)]
-    public string? Address { get; set; }
+    [MaxLength(100)] public string Name { get; set; } = string.Empty;
+    [MaxLength(100)] public string? ContactName { get; set; }
+    [Phone][MaxLength(20)] public string? Phone { get; set; }
+    [EmailAddress][MaxLength(100)] public string? Email { get; set; }
+    [MaxLength(255)] public string? Address { get; set; }
 }
 
 public class UpdateSupplierRequest
 {
-    [MaxLength(100)]
-    public string? Name { get; set; }
-
-    [MaxLength(100)]
-    public string? ContactName { get; set; }
-
-    [Phone(ErrorMessage = "Số điện thoại không hợp lệ.")]
-    [MaxLength(20)]
-    public string? Phone { get; set; }
-
-    [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
-    [MaxLength(100)]
-    public string? Email { get; set; }
-
-    [MaxLength(255)]
-    public string? Address { get; set; }
+    [MaxLength(100)] public string? Name { get; set; }
+    [MaxLength(100)] public string? ContactName { get; set; }
+    [Phone][MaxLength(20)] public string? Phone { get; set; }
+    [EmailAddress][MaxLength(100)] public string? Email { get; set; }
+    [MaxLength(255)] public string? Address { get; set; }
 }
 
 public class CreateProductRequest
 {
     [Required(ErrorMessage = "Tên sản phẩm không được để trống.")]
-    [MaxLength(100)]
-    public string Name { get; set; } = string.Empty;
-
-    [MaxLength(50)]
-    public string? Unit { get; set; }
-
-    [Range(0, int.MaxValue)]
-    public int MinQty { get; set; } = 5;
+    [MaxLength(100)] public string Name { get; set; } = string.Empty;
+    [MaxLength(50)] public string? Unit { get; set; }
+    [Range(0, int.MaxValue)] public int MinQty { get; set; } = 5;
 }
 
 public class CreatePurchaseOrderRequest
 {
-    [Required]
-    public int SupplierId { get; set; }
-
-    [MaxLength(500)]
-    public string? Note { get; set; }
-
-    [Required]
-    [MinLength(1, ErrorMessage = "Đơn hàng phải có ít nhất 1 sản phẩm.")]
-    public List<PurchaseOrderDetailItem> Items { get; set; } = [];
+    [Required] public int SupplierId { get; set; }
+    [MaxLength(500)] public string? Note { get; set; }
+    [Required][MinLength(1)] public List<PurchaseOrderDetailItem> Items { get; set; } = [];
 }
 
 public class PurchaseOrderDetailItem
 {
-    [Required]
-    public int ProductId { get; set; }
-
-    [Range(1, int.MaxValue, ErrorMessage = "Số lượng phải lớn hơn 0.")]
-    public int Quantity { get; set; }
-
-    [Range(0.01, double.MaxValue, ErrorMessage = "Đơn giá phải lớn hơn 0.")]
-    public decimal UnitPrice { get; set; }
+    [Required] public int ProductId { get; set; }
+    [Range(1, int.MaxValue)] public int Quantity { get; set; }
+    [Range(0.01, double.MaxValue)] public decimal UnitPrice { get; set; }
 }
 
 // ================================================================
@@ -451,29 +343,16 @@ public class PurchaseOrderDetailItem
 
 public class CreateIncidentRequest
 {
-    [Required]
-    public int FieldId { get; set; }
-
-    [Required(ErrorMessage = "Tiêu đề sự cố không được để trống.")]
-    [MaxLength(200)]
-    public string Title { get; set; } = string.Empty;
-
-    [MaxLength(1000)]
-    public string? Description { get; set; }
-
-    [MaxLength(500)]
-    public string? ImageUrl { get; set; }
+    [Required] public int FieldId { get; set; }
+    [Required][MaxLength(200)] public string Title { get; set; } = string.Empty;
+    [MaxLength(1000)] public string? Description { get; set; }
+    [MaxLength(500)] public string? ImageUrl { get; set; }
 }
 
 public class HandleIncidentRequest
 {
-    // 2 = Đang xử lý | 3 = Đã xử lý — không cho phép đặt lại về Mới (1)
-    [Required]
-    [Range(2, 3, ErrorMessage = "StatusId phải là 2 (Đang xử lý) hoặc 3 (Đã xử lý).")]
-    public int StatusId { get; set; }
-
-    [MaxLength(500)]
-    public string? HandledNote { get; set; }
+    [Required][Range(2, 3)] public int StatusId { get; set; }
+    [MaxLength(500)] public string? HandledNote { get; set; }
 }
 
 // ================================================================
@@ -482,18 +361,10 @@ public class HandleIncidentRequest
 
 public class CreateReviewRequest
 {
-    [Required]
-    public int BookingId { get; set; }
-
-    [Required]
-    [Range(1, 5, ErrorMessage = "Rating phải từ 1 đến 5 sao.")]
-    public int Rating { get; set; }
-
-    [MaxLength(1000)]
-    public string? Comment { get; set; }
-
-    [MaxLength(500)]
-    public string? ImageUrl { get; set; }
+    [Required] public int BookingId { get; set; }
+    [Required][Range(1, 5)] public int Rating { get; set; }
+    [MaxLength(1000)] public string? Comment { get; set; }
+    [MaxLength(500)] public string? ImageUrl { get; set; }
 }
 
 public class GetReviewsRequest
@@ -502,9 +373,7 @@ public class GetReviewsRequest
     public int? Rating { get; set; }
     public bool? IsVisible { get; set; }
     public int Page { get; set; } = 1;
-
-    [Range(1, 100, ErrorMessage = "PageSize phải từ 1 đến 100.")]
-    public int PageSize { get; set; } = 20;
+    [Range(1, 100)] public int PageSize { get; set; } = 20;
 }
 
 // ================================================================
@@ -513,34 +382,19 @@ public class GetReviewsRequest
 
 public class CreateSpecialDayRequest
 {
-    [Required]
-    public DateOnly SpecialDate { get; set; }
-
-    [Required(ErrorMessage = "Tên ngày đặc biệt không được để trống.")]
-    [MaxLength(100)]
-    public string Name { get; set; } = string.Empty;
-
-    [Range(0.01, 10, ErrorMessage = "Hệ số giá phải trong khoảng 0.01 – 10.")]
-    public decimal PriceMultiplier { get; set; } = 1.0m;
-
+    [Required] public DateOnly SpecialDate { get; set; }
+    [Required][MaxLength(100)] public string Name { get; set; } = string.Empty;
+    [Range(0.01, 10)] public decimal PriceMultiplier { get; set; } = 1.0m;
     public bool IsFullDayPeak { get; set; } = false;
-
-    [MaxLength(255)]
-    public string? Note { get; set; }
+    [MaxLength(255)] public string? Note { get; set; }
 }
 
 public class UpdateSpecialDayRequest
 {
-    [MaxLength(100)]
-    public string? Name { get; set; }
-
-    [Range(0.01, 10, ErrorMessage = "Hệ số giá phải trong khoảng 0.01 – 10.")]
-    public decimal? PriceMultiplier { get; set; }
-
+    [MaxLength(100)] public string? Name { get; set; }
+    [Range(0.01, 10)] public decimal? PriceMultiplier { get; set; }
     public bool? IsFullDayPeak { get; set; }
-
-    [MaxLength(255)]
-    public string? Note { get; set; }
+    [MaxLength(255)] public string? Note { get; set; }
 }
 
 // ================================================================
@@ -549,49 +403,29 @@ public class UpdateSpecialDayRequest
 
 public class UpdateSystemConfigRequest
 {
-    [Required(ErrorMessage = "Giá trị cấu hình không được để trống.")]
-    [MaxLength(500)]
-    public string ConfigValue { get; set; } = string.Empty;
+    [Required][MaxLength(500)] public string ConfigValue { get; set; } = string.Empty;
 }
 
 // ================================================================
-// Maintenance
+// Maintenance & Slots & Notifications
 // ================================================================
 
 public class CreateMaintenanceRequest
 {
-    [Required(ErrorMessage = "Lý do bảo trì không được để trống.")]
-    [MaxLength(500)]
-    public string Reason { get; set; } = string.Empty;
-
-    [Required]
-    public DateOnly StartDate { get; set; }
-
+    [Required][MaxLength(500)] public string Reason { get; set; } = string.Empty;
+    [Required] public DateOnly StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
 }
 
-// ================================================================
-// Notifications
-// ================================================================
+public class GenerateSlotsRequest
+{
+    [Required] public DateOnly StartDate { get; set; }
+    [Required] public DateOnly EndDate { get; set; }
+}
 
 public class GetNotificationsRequest
 {
     public bool? IsRead { get; set; }
     public int Page { get; set; } = 1;
-
-    [Range(1, 100, ErrorMessage = "PageSize phải từ 1 đến 100.")]
-    public int PageSize { get; set; } = 20;
-}
-
-// ================================================================
-// Slots
-// ================================================================
-
-public class GenerateSlotsRequest
-{
-    [Required]
-    public DateOnly StartDate { get; set; }
-
-    [Required]
-    public DateOnly EndDate { get; set; }
+    [Range(1, 100)] public int PageSize { get; set; } = 20;
 }

@@ -80,7 +80,7 @@ public class BookingsController : ControllerBase
         [FromQuery] int pageSize = 10)
     {
         var userId = User.GetUserId();
-        var result = await _bookingService.GetMyBookingsAsync(userId, page, pageSize);
+        var result = await _bookingService.GetMyBookingsAsync(userId, null, page, pageSize);
         return Ok(ApiResponse<PagedResponse<BookingSummaryResponse>>.Ok(result));
     }
 
