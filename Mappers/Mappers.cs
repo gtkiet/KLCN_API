@@ -3,14 +3,10 @@ using KLCN_API.Models.Entities;
 
 namespace KLCN_API.Mappers;
 
-/// <summary>
-/// Mapper tập trung cho User entity → DTO.
-/// Dùng chung ở AuthService, ProfileService, UserService để tránh lặp code
-/// và đảm bảo mapping nhất quán khi thêm field mới.
-/// </summary>
+/// <summary>Mapper tập trung cho User entity → DTO.</summary>
 public static class UserMapper
 {
-    /// <summary>Map sang UserResponse dùng trong danh sách và trong LoginResponse.</summary>
+    /// <summary>Map sang UserResponse dùng trong danh sách và LoginResponse.</summary>
     public static UserResponse ToResponse(User u) => new()
     {
         UserId = u.UserId,
@@ -46,10 +42,7 @@ public static class UserMapper
     };
 }
 
-/// <summary>
-/// Mapper tập trung cho Field entity → DTO.
-/// Dùng chung cho FieldService để tránh lặp code.
-/// </summary>
+/// <summary>Mapper tập trung cho Field entity → DTO.</summary>
 public static class FieldMapper
 {
     public static FieldResponse ToResponse(Field f) => new()
@@ -83,94 +76,7 @@ public static class FieldMapper
     };
 }
 
-/// <summary>
-/// Mapper tập trung cho Notification entity → DTO.
-/// Dùng chung ở NotificationService để tránh lặp code.
-/// </summary>
-public static class NotificationMapper
-{
-    public static NotificationResponse ToResponse(Notification n) => new()
-    {
-        NotificationId = n.NotificationId,
-        Title = n.Title,
-        Body = n.Body,
-        Type = n.Type,
-        RefId = n.RefId,
-        IsRead = n.IsRead,
-        CreatedAt = n.CreatedAt
-    };
-}
-
-/// <summary>
-/// Mapper tập trung cho SystemConfig entity → DTO.
-/// Dùng chung ở SystemConfigService để tránh lặp code.
-/// </summary>
-public static class SystemConfigMapper
-{
-    public static SystemConfigResponse ToResponse(SystemConfig c) => new()
-    {
-        ConfigKey = c.ConfigKey,
-        ConfigValue = c.ConfigValue,
-        DataType = c.DataType,
-        Description = c.Description,
-        UpdatedAt = c.UpdatedAt,
-        // UpdatedByUser có thể null nếu chưa ai chỉnh sửa
-        UpdatedBy = c.UpdatedByUser?.FullName
-    };
-}
-
-
-/// <summary>
-/// Mapper tập trung cho Incident entity → DTO.
-/// Dùng chung ở IncidentService để tránh lặp code.
-/// </summary>
-public static class IncidentMapper
-{
-    public static IncidentResponse ToResponse(Incident i) => new()
-    {
-        IncidentId = i.IncidentId,
-        FieldId = i.FieldId,
-        FieldName = i.Field?.Name ?? string.Empty,
-        ReportedBy = i.ReportedByUser?.FullName ?? string.Empty,
-        Title = i.Title,
-        Description = i.Description,
-        ImageUrl = i.ImageUrl,
-        Status = i.Status?.Name ?? string.Empty,
-        StatusId = i.StatusId,
-        HandledBy = i.HandledByUser?.FullName,
-        HandledAt = i.HandledAt,
-        HandledNote = i.HandledNote,
-        CreatedAt = i.CreatedAt
-    };
-}
-
-/// <summary>
-/// Mapper tập trung cho Review entity → DTO.
-/// Dùng chung ở ReviewService để tránh lặp code.
-/// </summary>
-public static class ReviewMapper
-{
-    public static ReviewResponse ToResponse(Review r) => new()
-    {
-        ReviewId = r.ReviewId,
-        BookingId = r.BookingId,
-        UserId = r.UserId,
-        UserName = r.User?.FullName ?? string.Empty,
-        AvatarUrl = r.User?.Profile?.AvatarUrl,
-        FieldId = r.FieldId,
-        FieldName = r.Field?.Name ?? string.Empty,
-        Rating = r.Rating,
-        Comment = r.Comment,
-        ImageUrl = r.ImageUrl,
-        IsVisible = r.IsVisible,
-        CreatedAt = r.CreatedAt
-    };
-}
-
-/// <summary>
-/// Mapper tập trung cho Booking entity → DTO.
-/// Tách ra để BookingService và PaymentService cùng dùng mà không circular dependency.
-/// </summary>
+/// <summary>Mapper tập trung cho Booking entity → DTO.</summary>
 public static class BookingMapper
 {
     public static BookingResponse MapDetail(Booking b) => new()
@@ -247,15 +153,79 @@ public static class BookingMapper
     }
 }
 
+/// <summary>Mapper tập trung cho Notification entity → DTO.</summary>
+public static class NotificationMapper
+{
+    public static NotificationResponse ToResponse(Notification n) => new()
+    {
+        NotificationId = n.NotificationId,
+        Title = n.Title,
+        Body = n.Body,
+        Type = n.Type,
+        RefId = n.RefId,
+        IsRead = n.IsRead,
+        CreatedAt = n.CreatedAt
+    };
+}
 
-/// <summary>
-/// Mapper tập trung cho Inventory entities → DTO.
-/// Theo cùng pattern UserMapper: static class, tách file riêng.
-/// </summary>
+/// <summary>Mapper tập trung cho SystemConfig entity → DTO.</summary>
+public static class SystemConfigMapper
+{
+    public static SystemConfigResponse ToResponse(SystemConfig c) => new()
+    {
+        ConfigKey = c.ConfigKey,
+        ConfigValue = c.ConfigValue,
+        DataType = c.DataType,
+        Description = c.Description,
+        UpdatedAt = c.UpdatedAt,
+        UpdatedBy = c.UpdatedByUser?.FullName
+    };
+}
+
+/// <summary>Mapper tập trung cho Incident entity → DTO.</summary>
+public static class IncidentMapper
+{
+    public static IncidentResponse ToResponse(Incident i) => new()
+    {
+        IncidentId = i.IncidentId,
+        FieldId = i.FieldId,
+        FieldName = i.Field?.Name ?? string.Empty,
+        ReportedBy = i.ReportedByUser?.FullName ?? string.Empty,
+        Title = i.Title,
+        Description = i.Description,
+        ImageUrl = i.ImageUrl,
+        Status = i.Status?.Name ?? string.Empty,
+        StatusId = i.StatusId,
+        HandledBy = i.HandledByUser?.FullName,
+        HandledAt = i.HandledAt,
+        HandledNote = i.HandledNote,
+        CreatedAt = i.CreatedAt
+    };
+}
+
+/// <summary>Mapper tập trung cho Review entity → DTO.</summary>
+public static class ReviewMapper
+{
+    public static ReviewResponse ToResponse(Review r) => new()
+    {
+        ReviewId = r.ReviewId,
+        BookingId = r.BookingId,
+        UserId = r.UserId,
+        UserName = r.User?.FullName ?? string.Empty,
+        AvatarUrl = r.User?.Profile?.AvatarUrl,
+        FieldId = r.FieldId,
+        FieldName = r.Field?.Name ?? string.Empty,
+        Rating = r.Rating,
+        Comment = r.Comment,
+        ImageUrl = r.ImageUrl,
+        IsVisible = r.IsVisible,
+        CreatedAt = r.CreatedAt
+    };
+}
+
+/// <summary>Mapper tập trung cho Inventory entities → DTO.</summary>
 public static class InventoryMapper
 {
-    // ── Supplier ─────────────────────────────────────────────
-
     public static SupplierResponse ToResponse(Supplier s) => new()
     {
         SupplierId = s.SupplierId,
@@ -266,8 +236,6 @@ public static class InventoryMapper
         Address = s.Address
     };
 
-    // ── Product ──────────────────────────────────────────────
-
     public static ProductResponse ToResponse(Product p) => new()
     {
         ProductId = p.ProductId,
@@ -275,10 +243,7 @@ public static class InventoryMapper
         Unit = p.Unit,
         StockQty = p.StockQty,
         MinQty = p.MinQty
-        // IsLowStock và StockBuffer là computed properties — tự tính từ trên
     };
-
-    // ── PurchaseOrder ────────────────────────────────────────
 
     public static PurchaseOrderResponse ToResponse(PurchaseOrder po) => new()
     {
@@ -301,6 +266,5 @@ public static class InventoryMapper
         Unit = d.Product?.Unit,
         Quantity = d.Quantity,
         UnitPrice = d.UnitPrice
-        // SubTotal là computed property
     };
 }

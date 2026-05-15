@@ -94,8 +94,8 @@ public class PaymentsController : ControllerBase
         var bookingId = txnRef.Split('_').FirstOrDefault() ?? "0";
 
         var frontendUrl = isValid && isSuccess
-            ? $"https://yourfrontend.com/booking/{bookingId}/success"
-            : $"https://yourfrontend.com/booking/{bookingId}/failed";
+            ? $"/booking/{bookingId}/success"
+            : $"/booking/{bookingId}/failed";
 
         return Redirect(frontendUrl);
     }
@@ -181,8 +181,8 @@ public class PaymentsController : ControllerBase
         var bookingId = MoMoHelper.ParseBookingId(orderId);
 
         var frontendUrl = resultCode == 0
-            ? $"https://yourfrontend.com/booking/{bookingId}/success"
-            : $"https://yourfrontend.com/booking/{bookingId}/failed";
+            ? $"/booking/{bookingId}/success"
+            : $"/booking/{bookingId}/failed";
 
         return Redirect(frontendUrl);
     }

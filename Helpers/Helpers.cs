@@ -1,7 +1,6 @@
 ﻿using KLCN_API.Configurations;
 using KLCN_API.Middleware;
 using KLCN_API.Models.DTOs.Response;
-using KLCN_API.Models.Entities;
 using KLCN_API.Models.Enums;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -17,25 +16,21 @@ using System.Text.Json;
 
 namespace KLCN_API.Helpers;
 
+// ── JWT ───────────────────────────────────────────────────────────
+
 public class JwtHelper
 {
     private readonly JwtSettings _settings;
 
-    public JwtHelper(JwtSettings settings)
-    {
-        _settings = settings;
-    }
+    public JwtHelper(JwtSettings settings) => _settings = settings;
 
     /// <summary>
     /// Tạo JWT access token từ thông tin user.
     /// Caller phải đảm bảo user.Role đã được load (Include hoặc eager load),
     /// nếu không claim role sẽ sai và [AuthorizeRoles] sẽ không hoạt động.
     /// </summary>
-    public string GenerateAccessToken(User user)
+    public string GenerateAccessToken(Models.Entities.User user)
     {
-        // Role.Name ("Admin"/"Staff"/"Customer") phải khớp với RoleEnum.ToString()
-        // mà AuthorizeRolesAttribute dùng. Throw sớm thay vì fallback im lặng
-        // sang RoleId (số nguyên) — vì nếu claim role = "1" thì Authorize sẽ fail.
         if (user.Role is null)
             throw new InvalidOperationException(
                 $"User {user.UserId} chua load navigation Role. " +
@@ -46,11 +41,11 @@ public class JwtHelper
 
         var claims = new List<Claim>
         {
-            new(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-            new(ClaimTypes.Email,          user.Email),
-            new(ClaimTypes.Name,           user.FullName),
-            new(ClaimTypes.Role,           user.Role.Name),
-            new("roleId",                  user.RoleId.ToString()),
+            new(ClaimTypes.NameIdentifier,   user.UserId.ToString()),
+            new(ClaimTypes.Email,            user.Email),
+            new(ClaimTypes.Name,             user.FullName),
+            new(ClaimTypes.Role,             user.Role.Name),
+            new("roleId",                    user.RoleId.ToString()),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
 
@@ -59,18 +54,14 @@ public class JwtHelper
             audience: _settings.Audience,
             claims: claims,
             expires: DateTime.UtcNow.AddMinutes(_settings.AccessTokenExpiryMinutes),
-            signingCredentials: creds
-        );
+            signingCredentials: creds);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
     /// <summary>Tạo refresh token ngẫu nhiên (opaque token, 64 bytes).</summary>
     public string GenerateRefreshToken()
-    {
-        var bytes = RandomNumberGenerator.GetBytes(64);
-        return Convert.ToBase64String(bytes);
-    }
+        => Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
 
     /// <summary>
     /// Lấy ClaimsPrincipal từ access token đã hết hạn.
@@ -84,7 +75,7 @@ public class JwtHelper
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateIssuerSigningKey = true,
-            ValidateLifetime = false, // cho phép token đã hết hạn
+            ValidateLifetime = false,
             ValidIssuer = _settings.Issuer,
             ValidAudience = _settings.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(
@@ -98,17 +89,14 @@ public class JwtHelper
 
             if (securityToken is not JwtSecurityToken jwt ||
                 !jwt.Header.Alg.Equals(
-                    SecurityAlgorithms.HmacSha256,
-                    StringComparison.OrdinalIgnoreCase))
-            {
+                    SecurityAlgorithms.HmacSha256, StringComparison.OrdinalIgnoreCase))
                 throw new SecurityTokenException("Token khong hop le.");
-            }
 
             return principal;
         }
         catch (SecurityTokenException)
         {
-            throw; // re-throw để caller xử lý 401
+            throw;
         }
         catch (Exception ex)
         {
@@ -145,8 +133,7 @@ public static class ClaimsHelper
 {
     /// <summary>
     /// Lấy UserId từ JWT claims.
-    /// Trả về 0 nếu claim không tồn tại hoặc không parse được —
-    /// caller nên kiểm tra giá trị trả về trước khi dùng.
+    /// Trả về 0 nếu claim không tồn tại hoặc không parse được.
     /// </summary>
     public static int GetUserId(this ClaimsPrincipal principal)
     {
@@ -165,11 +152,9 @@ public static class ClaimsHelper
         return int.TryParse(claim, out var id) ? id : 0;
     }
 
-    /// <summary>Lấy email từ claims.</summary>
     public static string GetEmail(this ClaimsPrincipal principal)
         => principal.FindFirst(ClaimTypes.Email)?.Value ?? string.Empty;
 
-    /// <summary>Lấy họ tên đầy đủ từ claims.</summary>
     public static string GetFullName(this ClaimsPrincipal principal)
         => principal.FindFirst(ClaimTypes.Name)?.Value ?? string.Empty;
 
@@ -195,9 +180,7 @@ public static class StoredProcedureHelper
     /// Throw SqlException với message từ SP nếu SP THROW lỗi.
     /// </summary>
     public static async Task ExecuteSpAsync(
-        DbContext ctx,
-        string spName,
-        params SqlParameter[] parameters)
+        DbContext ctx, string spName, params SqlParameter[] parameters)
     {
         var paramList = BuildParamString(parameters);
         var sql = string.IsNullOrEmpty(paramList)
@@ -213,27 +196,22 @@ public static class StoredProcedureHelper
     /// đang được EF quản lý bên trong transaction.
     /// </summary>
     public static async Task<List<T>> QuerySpAsync<T>(
-        DbContext ctx,
-        string spName,
+        DbContext ctx, string spName,
         Func<IDataReader, T> mapper,
         params SqlParameter[] parameters)
     {
         var results = new List<T>();
         var conn = ctx.Database.GetDbConnection();
-
-        // Ghi nhớ trạng thái trước khi vào: chỉ đóng nếu chúng ta tự mở.
         var wasOpen = conn.State == ConnectionState.Open;
 
         try
         {
-            if (!wasOpen)
-                await conn.OpenAsync();
+            if (!wasOpen) await conn.OpenAsync();
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = spName;
             cmd.CommandType = CommandType.StoredProcedure;
 
-            // Gắn transaction hiện tại nếu có (tránh "connection is part of transaction" error)
             if (ctx.Database.CurrentTransaction is { } efTx)
                 cmd.Transaction = efTx.GetDbTransaction();
 
@@ -246,7 +224,6 @@ public static class StoredProcedureHelper
         }
         finally
         {
-            // Chỉ đóng nếu chúng ta là người mở
             if (!wasOpen && conn.State == ConnectionState.Open)
                 await conn.CloseAsync();
         }
@@ -254,27 +231,23 @@ public static class StoredProcedureHelper
         return results;
     }
 
-    // ── Factory methods cho các SP thường dùng ──────────────────
+    // ── Factory methods ───────────────────────────────────────────
 
-    /// <summary>
-    /// sp_HoldSlots — giữ slot, kiểm tra ràng buộc đặt trước.
-    /// Nhận danh sách ID dạng IEnumerable&lt;int&gt;, tự join thành CSV.
-    /// </summary>
+    /// <summary>sp_HoldSlots — giữ slot, kiểm tra ràng buộc đặt trước.</summary>
     public static Task HoldSlotsAsync(
         DbContext ctx, IEnumerable<int> fieldSlotIds, int? userId = null)
         => HoldSlotsAsync(ctx, string.Join(",", fieldSlotIds), userId);
 
-    /// <summary>Overload nhận CSV string — dùng khi đã có sẵn chuỗi.</summary>
     public static Task HoldSlotsAsync(
         DbContext ctx, string fieldSlotIds, int? userId = null)
         => ExecuteSpAsync(ctx, "sp_HoldSlots",
             new SqlParameter("@FieldSlotIds", fieldSlotIds),
             new SqlParameter("@UserId", (object?)userId ?? DBNull.Value));
 
-    /// <summary>sp_ConfirmBooking — xác nhận booking, tính tiền, tạo deposit nếu cần.</summary>
+    /// <summary>sp_ConfirmBooking — xác nhận booking, tính tiền, tạo deposit.</summary>
     public static Task ConfirmBookingAsync(
         DbContext ctx, int bookingId, string fieldSlotIds,
-        bool isFullPayment = true, int? userId = null)
+        bool isFullPayment = false, int? userId = null)
         => ExecuteSpAsync(ctx, "sp_ConfirmBooking",
             new SqlParameter("@BookingId", bookingId),
             new SqlParameter("@FieldSlotIds", fieldSlotIds),
@@ -353,8 +326,6 @@ public static class StoredProcedureHelper
             new SqlParameter("@ConfigValue", configValue),
             new SqlParameter("@UserId", (object?)userId ?? DBNull.Value));
 
-    // ── Internal ─────────────────────────────────────────────────
-
     private static string BuildParamString(SqlParameter[] parameters)
         => string.Join(", ", parameters.Select(p => p.ParameterName));
 }
@@ -366,13 +337,9 @@ public static class PaginationHelper
     public const int DefaultPageSize = 20;
     public const int MaxPageSize = 100;
 
-    /// <summary>
-    /// Phân trang IQueryable — thực thi 2 query: Count và dữ liệu trang.
-    /// </summary>
+    /// <summary>Phân trang IQueryable — thực thi 2 query: Count và dữ liệu trang.</summary>
     public static async Task<PagedResponse<T>> ToPagedAsync<T>(
-        IQueryable<T> query,
-        int page,
-        int pageSize)
+        IQueryable<T> query, int page, int pageSize)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
@@ -392,35 +359,90 @@ public static class PaginationHelper
         };
     }
 
-    /// <summary>
-    /// Phân trang từ List đã có trong bộ nhớ (dùng khi đã fetch xong).
-    /// </summary>
+    /// <summary>Phân trang từ List đã có trong bộ nhớ (dùng khi đã fetch xong).</summary>
     public static PagedResponse<T> ToPagedFromList<T>(
-        IEnumerable<T> source,
-        int page,
-        int pageSize)
+        IEnumerable<T> source, int page, int pageSize)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
 
         var list = source.ToList();
-        var totalCount = list.Count;
-        var items = list
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToList();
+        var items = list.Skip((page - 1) * pageSize).Take(pageSize).ToList();
 
         return new PagedResponse<T>
         {
             Items = items,
-            TotalCount = totalCount,
+            TotalCount = list.Count,
             Page = page,
             PageSize = pageSize
         };
     }
 }
 
-// ── VNPayHelper ───────────────────────────────────────────────────
+// ── Image Upload ──────────────────────────────────────────────────
+
+/// <summary>
+/// Helper upload ảnh dùng chung cho mọi entity (Field, Service, Profile...).
+/// Tên file = GUID — không bao giờ trùng, không path traversal.
+/// Lưu vào Uploads/{subfolder}/, trả về relative URL để lưu DB.
+/// Frontend tự ghép host khi hiển thị.
+/// </summary>
+public static class ImageUploadHelper
+{
+    private static readonly HashSet<string> AllowedExtensions =
+        new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp" };
+
+    private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
+
+    /// <summary>
+    /// Lưu file ảnh vào Uploads/{subfolder}/.
+    /// Trả về relative URL "/Uploads/{subfolder}/{guid}.ext".
+    /// </summary>
+    public static async Task<string> SaveAsync(
+        IFormFile file, string contentRootPath, string subfolder)
+    {
+        if (file is null || file.Length == 0)
+            throw new BusinessException("File không được rỗng.", 400);
+
+        var ext = Path.GetExtension(file.FileName);
+        if (!AllowedExtensions.Contains(ext))
+            throw new BusinessException(
+                "Chỉ chấp nhận file ảnh: .jpg, .jpeg, .png, .webp.", 400);
+
+        if (file.Length > MaxFileSizeBytes)
+            throw new BusinessException("File ảnh không được vượt quá 5MB.", 400);
+
+        var folder = Path.Combine(contentRootPath, "Uploads", subfolder);
+        Directory.CreateDirectory(folder);
+
+        var fileName = $"{Guid.NewGuid()}{ext.ToLowerInvariant()}";
+        var fullPath = Path.Combine(folder, fileName);
+
+        await using var stream = new FileStream(
+            fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        await file.CopyToAsync(stream);
+
+        return $"/Uploads/{subfolder}/{fileName}";
+    }
+
+    /// <summary>
+    /// Xóa file ảnh cũ nếu tồn tại. Silent fail nếu file không có.
+    /// Bảo vệ path traversal: chỉ xóa file trong thư mục Uploads/.
+    /// </summary>
+    public static void DeleteIfExists(string? oldRelativeUrl, string contentRootPath)
+    {
+        if (string.IsNullOrWhiteSpace(oldRelativeUrl)) return;
+
+        var relativePath = oldRelativeUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+        var fullPath = Path.GetFullPath(Path.Combine(contentRootPath, relativePath));
+        var uploadRoot = Path.GetFullPath(Path.Combine(contentRootPath, "Uploads"));
+
+        if (!fullPath.StartsWith(uploadRoot, StringComparison.OrdinalIgnoreCase)) return;
+        if (File.Exists(fullPath)) File.Delete(fullPath);
+    }
+}
+
+// ── VNPay ─────────────────────────────────────────────────────────
 
 public class VNPayHelper
 {
@@ -434,13 +456,12 @@ public class VNPayHelper
     {
         var txnRef = $"{bookingId}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
 
-        // SortedDictionary đảm bảo thứ tự key khi build query string
         var vnpay = new SortedDictionary<string, string>
         {
             ["vnp_Version"] = "2.1.0",
             ["vnp_Command"] = "pay",
             ["vnp_TmnCode"] = _settings.TmnCode,
-            ["vnp_Amount"] = ((long)(amount * 100)).ToString(), // VNPay tính theo đồng
+            ["vnp_Amount"] = ((long)(amount * 100)).ToString(),
             ["vnp_CurrCode"] = "VND",
             ["vnp_TxnRef"] = txnRef,
             ["vnp_OrderInfo"] = orderInfo,
@@ -452,7 +473,6 @@ public class VNPayHelper
             ["vnp_ExpireDate"] = DateTime.Now.AddMinutes(15).ToString("yyyyMMddHHmmss"),
         };
 
-        // Build query string và ký — UrlEncode value khi build URL nhưng KHÔNG encode khi hash
         var rawData = string.Join("&", vnpay.Select(kv => $"{kv.Key}={kv.Value}"));
         var urlData = string.Join("&", vnpay.Select(kv =>
             $"{kv.Key}={WebUtility.UrlEncode(kv.Value)}"));
@@ -473,11 +493,10 @@ public class VNPayHelper
 
         var receivedHash = query["vnp_SecureHash"].ToString();
 
-        // Lấy tất cả param trừ vnp_SecureHash, sắp xếp theo key, hash raw value
         var data = string.Join("&", query
             .Where(kv => kv.Key != "vnp_SecureHash" && kv.Key != "vnp_SecureHashType")
             .OrderBy(kv => kv.Key)
-            .Select(kv => $"{kv.Key}={kv.Value}"));  // KHÔNG UrlEncode — đã decode rồi
+            .Select(kv => $"{kv.Key}={kv.Value}"));
 
         var expectedHash = HmacSha512(_settings.HashSecret, data);
         return string.Equals(expectedHash, receivedHash, StringComparison.OrdinalIgnoreCase);
@@ -490,7 +509,7 @@ public class VNPayHelper
     }
 }
 
-// ── MoMoHelper ────────────────────────────────────────────────────
+// ── MoMo ─────────────────────────────────────────────────────────
 
 public class MoMoHelper
 {
@@ -514,7 +533,6 @@ public class MoMoHelper
         var requestId = Guid.NewGuid().ToString("N");
         var amountStr = ((long)amount).ToString();
 
-        // Chuỗi ký theo đúng thứ tự field MoMo quy định
         var rawSignature =
             $"accessKey={_settings.AccessKey}" +
             $"&amount={amountStr}" +
@@ -526,8 +544,6 @@ public class MoMoHelper
             $"&redirectUrl={_settings.ReturnUrl}" +
             $"&requestId={requestId}" +
             $"&requestType={_settings.RequestType}";
-
-        var signature = HmacSha256(_settings.SecretKey, rawSignature);
 
         var body = new
         {
@@ -541,14 +557,13 @@ public class MoMoHelper
             requestType = _settings.RequestType,
             extraData = string.Empty,
             lang = "vi",
-            signature
+            signature = HmacSha256(_settings.SecretKey, rawSignature)
         };
 
         var client = _httpFactory.CreateClient();
         var content = new StringContent(
             JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
         var response = await client.PostAsync(_settings.Endpoint, content);
-
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
@@ -566,10 +581,7 @@ public class MoMoHelper
         return payUrlProp.GetString()!;
     }
 
-    /// <summary>
-    /// Xác minh chữ ký IPN từ MoMo.
-    /// MoMo gửi JSON body với field "signature".
-    /// </summary>
+    /// <summary>Xác minh chữ ký IPN từ MoMo.</summary>
     public bool ValidateIpn(
         string partnerCode, string orderId, string requestId,
         string amount, string orderInfo, string orderType,
@@ -607,137 +619,5 @@ public class MoMoHelper
     {
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(key));
         return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(data))).ToLower();
-    }
-}
-
-public static class FieldImageHelper
-{
-    private static readonly HashSet<string> AllowedExtensions =
-        new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp" };
-
-    private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
-
-    /// <summary>
-    /// Lưu file ảnh vào thư mục Uploads/fields/.
-    /// Tên file = GUID mới (tránh trùng, tránh path traversal).
-    /// Trả về relative URL "/Uploads/fields/{guid}.ext" để lưu vào DB.
-    /// </summary>
-    public static async Task<string> SaveAsync(
-        IFormFile file, string contentRootPath)
-    {
-        // Validate extension
-        var ext = Path.GetExtension(file.FileName);
-        if (!AllowedExtensions.Contains(ext))
-            throw new BusinessException(
-                "Chỉ chấp nhận file ảnh: .jpg, .jpeg, .png, .webp.", 400);
-
-        // Validate size
-        if (file.Length == 0)
-            throw new BusinessException("File không được rỗng.", 400);
-
-        if (file.Length > MaxFileSizeBytes)
-            throw new BusinessException("File ảnh không được vượt quá 5MB.", 400);
-
-        // Tạo thư mục nếu chưa có
-        var folder = Path.Combine(contentRootPath, "Uploads", "fields");
-        Directory.CreateDirectory(folder); // no-op nếu đã tồn tại
-
-        // Tên file an toàn: GUID + extension gốc (đã validate ở trên)
-        var fileName = $"{Guid.NewGuid()}{ext.ToLowerInvariant()}";
-        var fullPath = Path.Combine(folder, fileName);
-
-        await using var stream = new FileStream(
-            fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-        await file.CopyToAsync(stream);
-
-        // Relative URL — frontend ghép host
-        return $"/Uploads/fields/{fileName}";
-    }
-
-    /// <summary>
-    /// Xóa file ảnh cũ nếu tồn tại. Silent fail nếu file không có.
-    /// oldRelativeUrl: "/Uploads/fields/xxx.jpg"
-    /// </summary>
-    public static void DeleteIfExists(string? oldRelativeUrl, string contentRootPath)
-    {
-        if (string.IsNullOrWhiteSpace(oldRelativeUrl)) return;
-
-        // Chuyển relative URL → absolute path, block path traversal
-        var relativePath = oldRelativeUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-        var fullPath = Path.GetFullPath(Path.Combine(contentRootPath, relativePath));
-        var uploadRoot = Path.GetFullPath(Path.Combine(contentRootPath, "Uploads"));
-
-        // Bảo vệ: không xóa file ngoài thư mục Uploads
-        if (!fullPath.StartsWith(uploadRoot, StringComparison.OrdinalIgnoreCase)) return;
-
-        if (File.Exists(fullPath))
-            File.Delete(fullPath);
-    }
-}
-
-/// <summary>
-/// Helper upload ảnh dùng chung cho mọi entity (Field, Service, Profile...).
-/// Tên file = GUID mới, tránh trùng và path traversal.
-/// Lưu vào Uploads/{subfolder}/, trả về relative URL để lưu DB.
-/// Frontend tự ghép host khi hiển thị.
-/// </summary>
-public static class ImageUploadHelper
-{
-    private static readonly HashSet<string> AllowedExtensions =
-        new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp" };
-
-    private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
-
-    /// <summary>
-    /// Lưu file ảnh vào Uploads/{subfolder}/.
-    /// Trả về relative URL "/Uploads/{subfolder}/{guid}.ext".
-    /// </summary>
-    /// <param name="file">File từ request.</param>
-    /// <param name="contentRootPath">env.ContentRootPath từ IWebHostEnvironment.</param>
-    /// <param name="subfolder">Tên thư mục con, ví dụ "fields", "services", "avatars".</param>
-    public static async Task<string> SaveAsync(
-        IFormFile file, string contentRootPath, string subfolder)
-    {
-        if (file is null || file.Length == 0)
-            throw new BusinessException("File không được rỗng.", 400);
-
-        var ext = Path.GetExtension(file.FileName);
-        if (!AllowedExtensions.Contains(ext))
-            throw new BusinessException(
-                "Chỉ chấp nhận file ảnh: .jpg, .jpeg, .png, .webp.", 400);
-
-        if (file.Length > MaxFileSizeBytes)
-            throw new BusinessException("File ảnh không được vượt quá 5MB.", 400);
-
-        var folder = Path.Combine(contentRootPath, "Uploads", subfolder);
-        Directory.CreateDirectory(folder);
-
-        var fileName = $"{Guid.NewGuid()}{ext.ToLowerInvariant()}";
-        var fullPath = Path.Combine(folder, fileName);
-
-        await using var stream = new FileStream(
-            fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-        await file.CopyToAsync(stream);
-
-        return $"/Uploads/{subfolder}/{fileName}";
-    }
-
-    /// <summary>
-    /// Xóa file ảnh cũ nếu tồn tại. Silent fail nếu file không có.
-    /// Bảo vệ path traversal: chỉ xóa file trong thư mục Uploads/.
-    /// </summary>
-    /// <param name="oldRelativeUrl">Ví dụ: "/Uploads/fields/abc.jpg"</param>
-    public static void DeleteIfExists(string? oldRelativeUrl, string contentRootPath)
-    {
-        if (string.IsNullOrWhiteSpace(oldRelativeUrl)) return;
-
-        var relativePath = oldRelativeUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-        var fullPath = Path.GetFullPath(Path.Combine(contentRootPath, relativePath));
-        var uploadRoot = Path.GetFullPath(Path.Combine(contentRootPath, "Uploads"));
-
-        if (!fullPath.StartsWith(uploadRoot, StringComparison.OrdinalIgnoreCase)) return;
-
-        if (File.Exists(fullPath))
-            File.Delete(fullPath);
     }
 }
