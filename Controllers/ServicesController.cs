@@ -71,4 +71,12 @@ public class ServicesController : ControllerBase
         await _serviceService.DeleteAsync(serviceId);
         return Ok(ApiResponse.Ok("Xóa dịch vụ thành công."));
     }
+
+    [HttpGet("{serviceId:int}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetById(int serviceId)
+    {
+        var result = await _serviceService.GetByIdAsync(serviceId);
+        return Ok(ApiResponse<ServiceResponse>.Ok(result));
+    }
 }
