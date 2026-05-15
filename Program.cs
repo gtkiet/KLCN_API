@@ -20,6 +20,7 @@ builder.Services.AddDatabase(builder.Configuration);
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddCorsPolicy(builder.Configuration);
 builder.Services.AddSwaggerWithAuth();
+builder.Services.AddPaymentGateways(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddRepositories();
 

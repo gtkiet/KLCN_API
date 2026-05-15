@@ -2,7 +2,6 @@ using KLCN_API.Configurations;
 using KLCN_API.Data;
 using KLCN_API.Helpers;
 using KLCN_API.Models.DTOs.Response;
-//using KLCN_API.Models.Entities;
 using KLCN_API.Repositories;
 using KLCN_API.Repositories.Interfaces;
 using KLCN_API.Services;
@@ -42,7 +41,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<JwtHelper>();
 
         var key = Encoding.UTF8.GetBytes(jwtSettings.SecretKey);
-        var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        var jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
 
         services
             .AddAuthentication(o =>
@@ -74,14 +76,16 @@ public static class ServiceCollectionExtensions
                         ctx.Response.StatusCode = 401;
                         ctx.Response.ContentType = "application/json";
                         await ctx.Response.WriteAsync(JsonSerializer.Serialize(
-                            ApiResponse.Fail("Ban chua dang nhap hoac token khong hop le."), jsonOptions));
+                            ApiResponse.Fail("Ban chua dang nhap hoac token khong hop le."),
+                            jsonOptions));
                     },
                     OnForbidden = async ctx =>
                     {
                         ctx.Response.StatusCode = 403;
                         ctx.Response.ContentType = "application/json";
                         await ctx.Response.WriteAsync(JsonSerializer.Serialize(
-                            ApiResponse.Fail("Ban khong co quyen thuc hien thao tac nay."), jsonOptions));
+                            ApiResponse.Fail("Ban khong co quyen thuc hien thao tac nay."),
+                            jsonOptions));
                     }
                 };
             });
@@ -119,7 +123,7 @@ public static class ServiceCollectionExtensions
     }
 
     public static IServiceCollection AddSwaggerWithAuth(
-    this IServiceCollection services)
+        this IServiceCollection services)
     {
         services.AddSwaggerGen(options =>
         {
@@ -160,47 +164,75 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddVNPaySettings(this IServiceCollection services, IConfiguration config)
+    /// <summary>
+    /// Đăng ký VNPay + MoMo helpers.
+    /// Gọi trong Program.cs: builder.Services.AddPaymentGateways(builder.Configuration);
+    /// </summary>
+    public static IServiceCollection AddPaymentGateways(
+        this IServiceCollection services, IConfiguration config)
     {
-        // ServiceCollectionExtensions.cs
+        // VNPay
         var vnpaySettings = config.GetSection("VNPaySettings").Get<VNPaySettings>()
-            ?? throw new InvalidOperationException("Thieu VNPaySettings.");
+            ?? throw new InvalidOperationException("Thieu VNPaySettings trong appsettings.");
         services.AddSingleton(vnpaySettings);
         services.AddSingleton<VNPayHelper>();
+
+        // MoMo — MoMoHelper dùng IHttpClientFactory để gọi API MoMo
+        var momoSettings = config.GetSection("MoMoSettings").Get<MoMoSettings>()
+            ?? throw new InvalidOperationException("Thieu MoMoSettings trong appsettings.");
+        services.AddSingleton(momoSettings);
+        services.AddHttpClient<MoMoHelper>(); // đăng ký typed HttpClient
+        // Nếu MoMoHelper không phải typed client mà nhận IHttpClientFactory:
+        // services.AddHttpClient();
+        // services.AddSingleton<MoMoHelper>();
 
         return services;
     }
 
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    public static IServiceCollection AddApplicationServices(
+        this IServiceCollection services)
     {
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IProfileService, ProfileService>();
         services.AddScoped<IFieldService, FieldService>();
-        //services.AddScoped<IBookingService, BookingService>();
-        //services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<IBookingService, BookingService>();
+        services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IPromotionService, PromotionService>();
         services.AddScoped<IServiceService, ServiceService>();
-        services.AddScoped<IIncidentService, IncidentService>();
-        //services.AddScoped<IReviewService, ReviewService>();
+
+         services.AddScoped<ISupplierService,  SupplierService>();
+        services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
+
+        services.AddScoped<IIncidentService,  IncidentService>();
+        services.AddScoped<IReviewService,    ReviewService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<ISystemConfigService, SystemConfigService>();
 
+
         return services;
     }
 
-    public static IServiceCollection AddRepositories(this IServiceCollection services)
+    public static IServiceCollection AddRepositories(
+        this IServiceCollection services)
     {
         services.AddScoped<IAuthRepository, AuthRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IFieldRepository, FieldRepository>();
-        //services.AddScoped<IBookingRepository, BookingRepository>();
-        //services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<IBookingRepository, BookingRepository>();
+        services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<IDepositRepository, DepositRepository>();
         services.AddScoped<IPromotionRepository, PromotionRepository>();
         services.AddScoped<IServiceRepository, ServiceRepository>();
-        services.AddScoped<IIncidentRepository, IncidentRepository>();
-        //services.AddScoped<IReviewRepository, ReviewRepository>();
+
+        services.AddScoped<ISupplierRepository, SupplierRepository>();
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<IPurchaseOrderRepository, PurchaseOrderRepository>();
+
+        services.AddScoped<IIncidentRepository,  IncidentRepository>();
+        services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IDashboardRepository, DashboardRepository>();
         services.AddScoped<ISystemConfigRepository, SystemConfigRepository>();

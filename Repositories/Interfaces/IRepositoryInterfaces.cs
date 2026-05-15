@@ -30,7 +30,7 @@ public interface IUserRepository
     Task<User?> GetByPhoneAsync(string phone);
     Task<(List<User> Items, int TotalCount)> GetUsersAsync(
         string? search, int? roleId, int? statusId, int page, int pageSize);
-
+    Task UpdateRoleAsync(int userId, int roleId);
     Task CreateAsync(User user);
     Task UpdateAsync(User user);
 
@@ -142,8 +142,8 @@ public interface IServiceRepository
 public interface ISupplierRepository
 {
     Task<Supplier?> GetByIdAsync(int supplierId);
-    Task<(List<Supplier> Items, int TotalCount)> GetSuppliersAsync(
-        string? search, int page, int pageSize);
+    Task<(List<Supplier> Items, int TotalCount)> GetAllAsync(string? search, int page, int pageSize);
+    Task<bool> NameExistsAsync(string name, int? excludeId = null);
     Task<Supplier> CreateAsync(Supplier supplier);
     Task UpdateAsync(Supplier supplier);
     Task SoftDeleteAsync(int supplierId);
@@ -152,9 +152,8 @@ public interface ISupplierRepository
 public interface IProductRepository
 {
     Task<Product?> GetByIdAsync(int productId);
-    Task<(List<Product> Items, int TotalCount)> GetProductsAsync(
-        string? search, int page, int pageSize);
-    Task<List<Product>> GetLowStockAsync();
+    Task<(List<Product> Items, int TotalCount)> GetAllAsync(string? search, bool? lowStockOnly, int page, int pageSize);
+    Task<bool> NameExistsAsync(string name, int? excludeId = null);
     Task<Product> CreateAsync(Product product);
     Task UpdateAsync(Product product);
     Task SoftDeleteAsync(int productId);
@@ -163,11 +162,9 @@ public interface IProductRepository
 public interface IPurchaseOrderRepository
 {
     Task<PurchaseOrder?> GetByIdAsync(int purchaseOrderId);
-    Task<PurchaseOrder?> GetWithDetailsAsync(int purchaseOrderId);
-    Task<(List<PurchaseOrder> Items, int TotalCount)> GetPurchaseOrdersAsync(
-        int? statusId, int page, int pageSize);
+    Task<(List<PurchaseOrder> Items, int TotalCount)> GetAllAsync(int? supplierId, int? statusId, int page, int pageSize);
     Task<PurchaseOrder> CreateAsync(PurchaseOrder order, List<PurchaseOrderDetail> details);
-    Task UpdateStatusAsync(int purchaseOrderId, int statusId, DateTime? confirmedAt);
+    Task CancelAsync(int purchaseOrderId);
 }
 
 // ================================================================

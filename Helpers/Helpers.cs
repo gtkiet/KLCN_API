@@ -1,4 +1,5 @@
 ﻿using KLCN_API.Configurations;
+using KLCN_API.Middleware;
 using KLCN_API.Models.DTOs.Response;
 using KLCN_API.Models.Entities;
 using KLCN_API.Models.Enums;
@@ -419,171 +420,6 @@ public static class PaginationHelper
     }
 }
 
-/// <summary>
-/// Mapper tập trung cho User entity → DTO.
-/// Dùng chung ở AuthService, ProfileService, UserService để tránh lặp code
-/// và đảm bảo mapping nhất quán khi thêm field mới.
-/// </summary>
-public static class UserMapper
-{
-    /// <summary>Map sang UserResponse dùng trong danh sách và trong LoginResponse.</summary>
-    public static UserResponse ToResponse(User u) => new()
-    {
-        UserId = u.UserId,
-        FullName = u.FullName,
-        Email = u.Email,
-        Phone = u.Phone,
-        Role = u.Role?.Name ?? string.Empty,
-        RoleId = u.RoleId,
-        Status = u.Status?.Name ?? string.Empty,
-        StatusId = u.StatusId,
-        AvatarUrl = u.Profile?.AvatarUrl,
-        CreatedAt = u.CreatedAt
-    };
-
-    /// <summary>Map sang UserDetailResponse dùng trong xem chi tiết và profile cá nhân.</summary>
-    public static UserDetailResponse ToDetailResponse(User u) => new()
-    {
-        UserId = u.UserId,
-        FullName = u.FullName,
-        Email = u.Email,
-        Phone = u.Phone,
-        Role = u.Role?.Name ?? string.Empty,
-        RoleId = u.RoleId,
-        Status = u.Status?.Name ?? string.Empty,
-        StatusId = u.StatusId,
-        CreatedAt = u.CreatedAt,
-        Profile = u.Profile is null ? null : new ProfileResponse
-        {
-            AvatarUrl = u.Profile.AvatarUrl,
-            DateOfBirth = u.Profile.DateOfBirth,
-            Address = u.Profile.Address
-        }
-    };
-}
-
-/// <summary>
-/// Mapper tập trung cho Field entity → DTO.
-/// Dùng chung cho FieldService để tránh lặp code.
-/// </summary>
-public static class FieldMapper
-{
-    public static FieldResponse ToResponse(Field f) => new()
-    {
-        FieldId = f.FieldId,
-        Name = f.Name,
-        Description = f.Description,
-        BasePrice = f.BasePrice,
-        PeakPrice = f.PeakPrice,
-        ImageUrl = f.ImageUrl,
-        FieldType = f.Type?.Name ?? string.Empty,
-        TypeId = f.TypeId,
-        Status = f.Status?.Name ?? string.Empty,
-        StatusId = f.StatusId,
-        CreatedAt = f.CreatedAt
-    };
-
-    public static SlotResponse ToSlotResponse(FieldSlot fs) => new()
-    {
-        FieldSlotId = fs.FieldSlotId,
-        SlotId = fs.SlotId,
-        StartTime = fs.TimeSlot.StartTime,
-        EndTime = fs.TimeSlot.EndTime,
-        Price = fs.Price,
-        IsPeakHour = fs.TimeSlot.IsPeakHour,
-        Status = fs.Status?.Name ?? string.Empty,
-        StatusId = fs.StatusId,
-        HoldRemainingSeconds = fs.StatusId == 2 && fs.HoldExpireAt > DateTime.UtcNow
-            ? (int)(fs.HoldExpireAt!.Value - DateTime.UtcNow).TotalSeconds
-            : null
-    };
-}
-
-/// <summary>
-/// Mapper tập trung cho Notification entity → DTO.
-/// Dùng chung ở NotificationService để tránh lặp code.
-/// </summary>
-public static class NotificationMapper
-{
-    public static NotificationResponse ToResponse(Notification n) => new()
-    {
-        NotificationId = n.NotificationId,
-        Title = n.Title,
-        Body = n.Body,
-        Type = n.Type,
-        RefId = n.RefId,
-        IsRead = n.IsRead,
-        CreatedAt = n.CreatedAt
-    };
-}
-
-/// <summary>
-/// Mapper tập trung cho SystemConfig entity → DTO.
-/// Dùng chung ở SystemConfigService để tránh lặp code.
-/// </summary>
-public static class SystemConfigMapper
-{
-    public static SystemConfigResponse ToResponse(SystemConfig c) => new()
-    {
-        ConfigKey = c.ConfigKey,
-        ConfigValue = c.ConfigValue,
-        DataType = c.DataType,
-        Description = c.Description,
-        UpdatedAt = c.UpdatedAt,
-        // UpdatedByUser có thể null nếu chưa ai chỉnh sửa
-        UpdatedBy = c.UpdatedByUser?.FullName
-    };
-}
-
-
-/// <summary>
-/// Mapper tập trung cho Incident entity → DTO.
-/// Dùng chung ở IncidentService để tránh lặp code.
-/// </summary>
-public static class IncidentMapper
-{
-    public static IncidentResponse ToResponse(Incident i) => new()
-    {
-        IncidentId = i.IncidentId,
-        FieldId = i.FieldId,
-        FieldName = i.Field?.Name ?? string.Empty,
-        ReportedBy = i.ReportedByUser?.FullName ?? string.Empty,
-        Title = i.Title,
-        Description = i.Description,
-        ImageUrl = i.ImageUrl,
-        Status = i.Status?.Name ?? string.Empty,
-        StatusId = i.StatusId,
-        HandledBy = i.HandledByUser?.FullName,
-        HandledAt = i.HandledAt,
-        HandledNote = i.HandledNote,
-        CreatedAt = i.CreatedAt
-    };
-}
-
-/// <summary>
-/// Mapper tập trung cho Review entity → DTO.
-/// Dùng chung ở ReviewService để tránh lặp code.
-/// </summary>
-public static class ReviewMapper
-{
-    public static ReviewResponse ToResponse(Review r) => new()
-    {
-        ReviewId = r.ReviewId,
-        BookingId = r.BookingId,
-        UserId = r.UserId,
-        UserName = r.User?.FullName ?? string.Empty,
-        AvatarUrl = r.User?.Profile?.AvatarUrl,
-        FieldId = r.FieldId,
-        FieldName = r.Field?.Name ?? string.Empty,
-        Rating = r.Rating,
-        Comment = r.Comment,
-        ImageUrl = r.ImageUrl,
-        IsVisible = r.IsVisible,
-        CreatedAt = r.CreatedAt
-    };
-}
-
-
 // ── VNPayHelper ───────────────────────────────────────────────────
 
 public class VNPayHelper
@@ -774,82 +610,134 @@ public class MoMoHelper
     }
 }
 
-/// <summary>
-/// Mapper tập trung cho Booking entity → DTO.
-/// Tách ra để BookingService và PaymentService cùng dùng mà không circular dependency.
-/// </summary>
-public static class BookingMapper
+public static class FieldImageHelper
 {
-    public static BookingResponse MapDetail(Booking b) => new()
-    {
-        BookingId = b.BookingId,
-        Customer = UserMapper.ToResponse(b.User),
-        Status = b.Status?.Name ?? string.Empty,
-        StatusId = b.StatusId,
-        SubTotal = b.SubTotal,
-        DiscountAmount = b.DiscountAmount,
-        TaxAmount = b.TaxAmount,
-        TotalAmount = b.TotalAmount,
-        DepositAmount = b.DepositAmount,
-        PromotionCode = b.Promotion?.Code,
-        Note = b.Note,
-        CancelReason = b.CancelReason,
-        RescheduleCount = b.RescheduleCount,
-        CreatedAt = b.CreatedAt,
-        UpdatedAt = b.UpdatedAt,
-        Details = b.BookingDetails?.Select(d => new BookingDetailResponse
-        {
-            BookingDetailId = d.BookingDetailId,
-            FieldId = d.FieldSlot.FieldId,
-            FieldName = d.FieldSlot.Field?.Name ?? string.Empty,
-            FieldType = d.FieldSlot.Field?.Type?.Name ?? string.Empty,
-            SlotDate = d.FieldSlot.SlotDate,
-            StartTime = d.FieldSlot.TimeSlot.StartTime,
-            EndTime = d.FieldSlot.TimeSlot.EndTime,
-            Price = d.Price
-        }).ToList() ?? [],
-        Services = b.BookingServices?.Select(bs => new BookingServiceResponse
-        {
-            ServiceId = bs.ServiceId,
-            ServiceName = bs.Service?.Name ?? string.Empty,
-            Quantity = bs.Quantity,
-            UnitPrice = bs.UnitPrice
-        }).ToList() ?? [],
-        Deposit = b.Deposit is null ? null : new DepositResponse
-        {
-            DepositId = b.Deposit.DepositId,
-            BookingId = b.BookingId,
-            RequiredAmount = b.Deposit.RequiredAmount,
-            PaidAmount = b.Deposit.PaidAmount,
-            Status = b.Deposit.Status?.Name ?? string.Empty,
-            StatusId = b.Deposit.StatusId,
-            DeadlineAt = b.Deposit.DeadlineAt,
-            MinutesLeft = Math.Max(0,
-                (int)(b.Deposit.DeadlineAt - DateTime.UtcNow).TotalMinutes),
-            PaidAt = b.Deposit.PaidAt
-        }
-    };
+    private static readonly HashSet<string> AllowedExtensions =
+        new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp" };
 
-    public static BookingSummaryResponse MapSummary(Booking b)
-    {
-        var earliest = b.BookingDetails?
-            .OrderBy(d => d.FieldSlot.SlotDate)
-            .ThenBy(d => d.FieldSlot.TimeSlot.StartTime)
-            .FirstOrDefault();
+    private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
 
-        return new BookingSummaryResponse
-        {
-            BookingId = b.BookingId,
-            CustomerName = b.User?.FullName ?? string.Empty,
-            CustomerPhone = b.User?.Phone ?? string.Empty,
-            Status = b.Status?.Name ?? string.Empty,
-            StatusId = b.StatusId,
-            TotalAmount = b.TotalAmount,
-            SlotCount = b.BookingDetails?.Count ?? 0,
-            EarliestSlotDate = earliest?.FieldSlot.SlotDate,
-            EarliestSlotTime = earliest?.FieldSlot.TimeSlot.StartTime,
-            FieldName = earliest?.FieldSlot.Field?.Name,
-            CreatedAt = b.CreatedAt
-        };
+    /// <summary>
+    /// Lưu file ảnh vào thư mục Uploads/fields/.
+    /// Tên file = GUID mới (tránh trùng, tránh path traversal).
+    /// Trả về relative URL "/Uploads/fields/{guid}.ext" để lưu vào DB.
+    /// </summary>
+    public static async Task<string> SaveAsync(
+        IFormFile file, string contentRootPath)
+    {
+        // Validate extension
+        var ext = Path.GetExtension(file.FileName);
+        if (!AllowedExtensions.Contains(ext))
+            throw new BusinessException(
+                "Chỉ chấp nhận file ảnh: .jpg, .jpeg, .png, .webp.", 400);
+
+        // Validate size
+        if (file.Length == 0)
+            throw new BusinessException("File không được rỗng.", 400);
+
+        if (file.Length > MaxFileSizeBytes)
+            throw new BusinessException("File ảnh không được vượt quá 5MB.", 400);
+
+        // Tạo thư mục nếu chưa có
+        var folder = Path.Combine(contentRootPath, "Uploads", "fields");
+        Directory.CreateDirectory(folder); // no-op nếu đã tồn tại
+
+        // Tên file an toàn: GUID + extension gốc (đã validate ở trên)
+        var fileName = $"{Guid.NewGuid()}{ext.ToLowerInvariant()}";
+        var fullPath = Path.Combine(folder, fileName);
+
+        await using var stream = new FileStream(
+            fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        await file.CopyToAsync(stream);
+
+        // Relative URL — frontend ghép host
+        return $"/Uploads/fields/{fileName}";
+    }
+
+    /// <summary>
+    /// Xóa file ảnh cũ nếu tồn tại. Silent fail nếu file không có.
+    /// oldRelativeUrl: "/Uploads/fields/xxx.jpg"
+    /// </summary>
+    public static void DeleteIfExists(string? oldRelativeUrl, string contentRootPath)
+    {
+        if (string.IsNullOrWhiteSpace(oldRelativeUrl)) return;
+
+        // Chuyển relative URL → absolute path, block path traversal
+        var relativePath = oldRelativeUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+        var fullPath = Path.GetFullPath(Path.Combine(contentRootPath, relativePath));
+        var uploadRoot = Path.GetFullPath(Path.Combine(contentRootPath, "Uploads"));
+
+        // Bảo vệ: không xóa file ngoài thư mục Uploads
+        if (!fullPath.StartsWith(uploadRoot, StringComparison.OrdinalIgnoreCase)) return;
+
+        if (File.Exists(fullPath))
+            File.Delete(fullPath);
+    }
+}
+
+/// <summary>
+/// Helper upload ảnh dùng chung cho mọi entity (Field, Service, Profile...).
+/// Tên file = GUID mới, tránh trùng và path traversal.
+/// Lưu vào Uploads/{subfolder}/, trả về relative URL để lưu DB.
+/// Frontend tự ghép host khi hiển thị.
+/// </summary>
+public static class ImageUploadHelper
+{
+    private static readonly HashSet<string> AllowedExtensions =
+        new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp" };
+
+    private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
+
+    /// <summary>
+    /// Lưu file ảnh vào Uploads/{subfolder}/.
+    /// Trả về relative URL "/Uploads/{subfolder}/{guid}.ext".
+    /// </summary>
+    /// <param name="file">File từ request.</param>
+    /// <param name="contentRootPath">env.ContentRootPath từ IWebHostEnvironment.</param>
+    /// <param name="subfolder">Tên thư mục con, ví dụ "fields", "services", "avatars".</param>
+    public static async Task<string> SaveAsync(
+        IFormFile file, string contentRootPath, string subfolder)
+    {
+        if (file is null || file.Length == 0)
+            throw new BusinessException("File không được rỗng.", 400);
+
+        var ext = Path.GetExtension(file.FileName);
+        if (!AllowedExtensions.Contains(ext))
+            throw new BusinessException(
+                "Chỉ chấp nhận file ảnh: .jpg, .jpeg, .png, .webp.", 400);
+
+        if (file.Length > MaxFileSizeBytes)
+            throw new BusinessException("File ảnh không được vượt quá 5MB.", 400);
+
+        var folder = Path.Combine(contentRootPath, "Uploads", subfolder);
+        Directory.CreateDirectory(folder);
+
+        var fileName = $"{Guid.NewGuid()}{ext.ToLowerInvariant()}";
+        var fullPath = Path.Combine(folder, fileName);
+
+        await using var stream = new FileStream(
+            fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        await file.CopyToAsync(stream);
+
+        return $"/Uploads/{subfolder}/{fileName}";
+    }
+
+    /// <summary>
+    /// Xóa file ảnh cũ nếu tồn tại. Silent fail nếu file không có.
+    /// Bảo vệ path traversal: chỉ xóa file trong thư mục Uploads/.
+    /// </summary>
+    /// <param name="oldRelativeUrl">Ví dụ: "/Uploads/fields/abc.jpg"</param>
+    public static void DeleteIfExists(string? oldRelativeUrl, string contentRootPath)
+    {
+        if (string.IsNullOrWhiteSpace(oldRelativeUrl)) return;
+
+        var relativePath = oldRelativeUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+        var fullPath = Path.GetFullPath(Path.Combine(contentRootPath, relativePath));
+        var uploadRoot = Path.GetFullPath(Path.Combine(contentRootPath, "Uploads"));
+
+        if (!fullPath.StartsWith(uploadRoot, StringComparison.OrdinalIgnoreCase)) return;
+
+        if (File.Exists(fullPath))
+            File.Delete(fullPath);
     }
 }

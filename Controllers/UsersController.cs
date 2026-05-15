@@ -43,35 +43,57 @@ public class UsersController : ControllerBase
     /// <summary>Tạo nhân viên — chỉ Admin.</summary>
     [HttpPost("staff")]
     [AuthorizeRoles(RoleEnum.Admin)]
-    [ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), 200)]
+    [ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), 201)]
     [ProducesResponseType(typeof(ApiResponse), 400)]
+    [ProducesResponseType(typeof(ApiResponse), 409)]
     public async Task<IActionResult> CreateStaff([FromBody] CreateStaffRequest request)
     {
         var result = await _userService.CreateStaffAsync(request);
-        return Ok(ApiResponse<UserDetailResponse>.Ok(result));
+        return Ok(ApiResponse<UserDetailResponse>.Ok(result, "Tạo nhân viên thành công."));
     }
 
     /// <summary>Tạo khách hàng từ trang quản trị — Admin và Staff.</summary>
     [HttpPost("customer")]
     [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
-    [ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), 200)]
+    [ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), 201)]
     [ProducesResponseType(typeof(ApiResponse), 400)]
-    public async Task<IActionResult> CreateCustomer([FromBody] CreateCustomerByAdminRequest request)
+    [ProducesResponseType(typeof(ApiResponse), 409)]
+    public async Task<IActionResult> CreateCustomer(
+        [FromBody] CreateCustomerByAdminRequest request)
     {
         var result = await _userService.CreateCustomerByAdminAsync(request);
-        return Ok(ApiResponse<UserDetailResponse>.Ok(result));
+        return Ok(ApiResponse<UserDetailResponse>.Ok(result, "Tạo khách hàng thành công."));
     }
 
-    /// <summary>Cập nhật user — Admin và Staff.</summary>
-    [HttpPut("{userId:int}")]
-    [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
-    [ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), 200)]
+    ///// <summary>Cập nhật thông tin user — Admin và Staff.</summary>
+    //[HttpPut("{userId:int}")]
+    //[AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
+    //[ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), 200)]
+    //[ProducesResponseType(typeof(ApiResponse), 400)]
+    //[ProducesResponseType(typeof(ApiResponse), 404)]
+    //[ProducesResponseType(typeof(ApiResponse), 409)]
+    //public async Task<IActionResult> Update(
+    //    int userId, [FromBody] UpdateUserRequest request)
+    //{
+    //    var result = await _userService.UpdateUserAsync(userId, request);
+    //    return Ok(ApiResponse<UserDetailResponse>.Ok(result, "Cập nhật thành công."));
+    //}
+
+    /// <summary>
+    /// Đổi role user — chỉ Admin.
+    /// Không thể gán role Admin, không thể đổi role của chính mình.
+    /// roleId: 2=Staff, 3=Customer.
+    /// </summary>
+    [HttpPatch("{userId:int}/role")]
+    [AuthorizeRoles(RoleEnum.Admin)]
+    [ProducesResponseType(typeof(ApiResponse), 200)]
     [ProducesResponseType(typeof(ApiResponse), 400)]
+    [ProducesResponseType(typeof(ApiResponse), 403)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
-    public async Task<IActionResult> Update(int userId, [FromBody] UpdateUserRequest request)
+    public async Task<IActionResult> UpdateRole(int userId, [FromBody] UpdateRoleRequest request)
     {
-        var result = await _userService.UpdateUserAsync(userId, request);
-        return Ok(ApiResponse<UserDetailResponse>.Ok(result));
+        await _userService.UpdateRoleAsync(userId, request.RoleId, User.GetUserId());
+        return Ok(ApiResponse.Ok("Đổi role thành công."));
     }
 
     /// <summary>Khóa tài khoản user — chỉ Admin.</summary>
@@ -101,7 +123,7 @@ public class UsersController : ControllerBase
         return Ok(ApiResponse.Ok("Mở khóa tài khoản thành công."));
     }
 
-    /// <summary>Xóa mềm user — chỉ Admin. Không thể xóa Admin khác hoặc chính mình.</summary>
+    /// <summary>Xóa mềm user — chỉ Admin. Không thể xóa Admin hoặc chính mình.</summary>
     [HttpDelete("{userId:int}")]
     [AuthorizeRoles(RoleEnum.Admin)]
     [ProducesResponseType(typeof(ApiResponse), 200)]

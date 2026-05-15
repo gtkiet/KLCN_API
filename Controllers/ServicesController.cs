@@ -13,10 +13,12 @@ namespace KLCN_API.Controllers;
 public class ServicesController : ControllerBase
 {
     private readonly IServiceService _serviceService;
+    private readonly IWebHostEnvironment _env;
 
-    public ServicesController(IServiceService serviceService)
+    public ServicesController(IServiceService serviceService, IWebHostEnvironment env)
     {
         _serviceService = serviceService;
+        _env = env;
     }
 
     /// <summary>Lấy danh sách dịch vụ — Public.</summary>
@@ -28,7 +30,7 @@ public class ServicesController : ControllerBase
         return Ok(ApiResponse<List<ServiceResponse>>.Ok(result));
     }
 
-    /// <summary>Tạo dịch vụ — Admin.</summary>
+    /// <summary>Tạo dịch vụ — Admin. Upload ảnh qua POST /{serviceId}/image sau khi tạo.</summary>
     [HttpPost]
     [AuthorizeRoles(RoleEnum.Admin)]
     public async Task<IActionResult> Create([FromBody] CreateServiceRequest request)
@@ -40,10 +42,25 @@ public class ServicesController : ControllerBase
     /// <summary>Cập nhật dịch vụ — Admin.</summary>
     [HttpPut("{serviceId:int}")]
     [AuthorizeRoles(RoleEnum.Admin)]
-    public async Task<IActionResult> Update(int serviceId, [FromBody] UpdateServiceRequest request)
+    public async Task<IActionResult> Update(
+        int serviceId, [FromBody] UpdateServiceRequest request)
     {
         var result = await _serviceService.UpdateAsync(serviceId, request);
         return Ok(ApiResponse<ServiceResponse>.Ok(result, "Cập nhật dịch vụ thành công."));
+    }
+
+    /// <summary>
+    /// Upload ảnh dịch vụ — Admin.
+    /// Gửi multipart/form-data với field tên "file".
+    /// Ảnh cũ bị xóa tự động. Trả về imageUrl relative.
+    /// </summary>
+    [HttpPost("{serviceId:int}/image")]
+    [AuthorizeRoles(RoleEnum.Admin)]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadImage(int serviceId, IFormFile file)
+    {
+        var imageUrl = await _serviceService.UploadImageAsync(serviceId, file, _env);
+        return Ok(ApiResponse<object>.Ok(new { imageUrl }, "Upload ảnh thành công."));
     }
 
     /// <summary>Xóa mềm dịch vụ — Admin.</summary>

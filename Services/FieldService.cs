@@ -1,5 +1,6 @@
 ﻿using KLCN_API.Data;
 using KLCN_API.Helpers;
+using KLCN_API.Mappers;
 using KLCN_API.Middleware;
 using KLCN_API.Models.DTOs.Request;
 using KLCN_API.Models.DTOs.Response;
@@ -15,7 +16,6 @@ public class FieldService : IFieldService
     private readonly IFieldRepository _fieldRepo;
     private readonly SportPlusDbContext _ctx;
 
-    // StoredProcedureHelper là static class — gọi trực tiếp, không inject qua DI
     public FieldService(IFieldRepository fieldRepo, SportPlusDbContext ctx)
     {
         _fieldRepo = fieldRepo;
@@ -43,14 +43,14 @@ public class FieldService : IFieldService
     {
         var field = await _fieldRepo.GetByIdAsync(fieldId)
             ?? throw new NotFoundException("Sân bóng", fieldId);
-
         return FieldMapper.ToResponse(field);
     }
 
     public async Task<FieldResponse> CreateAsync(int adminId, CreateFieldRequest request)
     {
         if (request.PeakPrice < request.BasePrice)
-            throw new BusinessException("Giá cao điểm phải lớn hơn hoặc bằng giá cơ bản.", 400);
+            throw new BusinessException(
+                "Giá cao điểm phải lớn hơn hoặc bằng giá cơ bản.", 400);
 
         var field = new Field
         {
@@ -59,7 +59,7 @@ public class FieldService : IFieldService
             BasePrice = request.BasePrice,
             PeakPrice = request.PeakPrice,
             TypeId = request.TypeId,
-            ImageUrl = request.ImageUrl,
+            ImageUrl = request.ImageUrl,   // null nếu chưa upload ảnh
             StatusId = (int)FieldStatusEnum.Active,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -69,7 +69,8 @@ public class FieldService : IFieldService
         return FieldMapper.ToResponse(created);
     }
 
-    public async Task<FieldResponse> UpdateAsync(int fieldId, int adminId, UpdateFieldRequest request)
+    public async Task<FieldResponse> UpdateAsync(
+        int fieldId, int adminId, UpdateFieldRequest request)
     {
         var field = await _fieldRepo.GetByIdAsync(fieldId)
             ?? throw new NotFoundException("Sân bóng", fieldId);
@@ -80,19 +81,18 @@ public class FieldService : IFieldService
         if (request.TypeId.HasValue) field.TypeId = request.TypeId.Value;
         if (request.StatusId.HasValue) field.StatusId = request.StatusId.Value;
 
-        // Validate giá trước khi gán — tránh PeakPrice < BasePrice
         var newBase = request.BasePrice ?? field.BasePrice;
         var newPeak = request.PeakPrice ?? field.PeakPrice;
 
         if (newPeak < newBase)
-            throw new BusinessException("Giá cao điểm phải lớn hơn hoặc bằng giá cơ bản.", 400);
+            throw new BusinessException(
+                "Giá cao điểm phải lớn hơn hoặc bằng giá cơ bản.", 400);
 
         if (request.BasePrice.HasValue) field.BasePrice = request.BasePrice.Value;
         if (request.PeakPrice.HasValue) field.PeakPrice = request.PeakPrice.Value;
 
         await _fieldRepo.UpdateAsync(field);
 
-        // Reload navigation để mapper có đủ dữ liệu sau khi update TypeId / StatusId
         await _ctx.Entry(field).Reference(f => f.Type).LoadAsync();
         await _ctx.Entry(field).Reference(f => f.Status).LoadAsync();
 
@@ -103,13 +103,32 @@ public class FieldService : IFieldService
     {
         _ = await _fieldRepo.GetByIdAsync(fieldId)
             ?? throw new NotFoundException("Sân bóng", fieldId);
-
         await _fieldRepo.SoftDeleteAsync(fieldId);
+    }
+
+    // ── Image upload ──────────────────────────────────────────────
+
+    public async Task<string> UploadImageAsync(
+        int fieldId, IFormFile file, IWebHostEnvironment env)
+    {
+        var field = await _fieldRepo.GetByIdAsync(fieldId)
+            ?? throw new NotFoundException("Sân bóng", fieldId);
+
+        var newUrl = await ImageUploadHelper.SaveAsync(
+            file, env.ContentRootPath, subfolder: "fields");
+
+        ImageUploadHelper.DeleteIfExists(field.ImageUrl, env.ContentRootPath);
+
+        field.ImageUrl = newUrl;
+        await _fieldRepo.UpdateAsync(field);
+
+        return newUrl;
     }
 
     // ── Schedule & slots ─────────────────────────────────────────
 
-    public async Task<List<FieldScheduleResponse>> GetScheduleAsync(GetFieldScheduleRequest request)
+    public async Task<List<FieldScheduleResponse>> GetScheduleAsync(
+        GetFieldScheduleRequest request)
     {
         var slots = await _fieldRepo.GetScheduleAsync(request.FieldId, request.Date);
 
@@ -132,7 +151,6 @@ public class FieldService : IFieldService
         if (request.StartDate > request.EndDate)
             throw new BusinessException("StartDate phải nhỏ hơn hoặc bằng EndDate.", 400);
 
-        // StoredProcedureHelper là static — gọi trực tiếp với _ctx
         await StoredProcedureHelper.GenerateSlotsAsync(_ctx, request.StartDate, request.EndDate);
     }
 
@@ -180,13 +198,15 @@ public class FieldService : IFieldService
         }).ToList();
     }
 
-    public async Task AddMaintenanceLogAsync(int fieldId, int createdBy, CreateMaintenanceRequest request)
+    public async Task AddMaintenanceLogAsync(
+        int fieldId, int createdBy, CreateMaintenanceRequest request)
     {
         var field = await _fieldRepo.GetByIdAsync(fieldId)
             ?? throw new NotFoundException("Sân bóng", fieldId);
 
         if (request.EndDate.HasValue && request.EndDate.Value < request.StartDate)
-            throw new BusinessException("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.", 400);
+            throw new BusinessException(
+                "Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.", 400);
 
         var log = new FieldMaintenanceLog
         {

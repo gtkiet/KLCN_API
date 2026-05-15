@@ -26,8 +26,8 @@ public interface IUserService
 
     Task<UserDetailResponse> CreateStaffAsync(CreateStaffRequest request);
     Task<UserDetailResponse> CreateCustomerByAdminAsync(CreateCustomerByAdminRequest request);
-    Task<UserDetailResponse> UpdateUserAsync(int userId, UpdateUserRequest request);
-
+    //Task<UserDetailResponse> UpdateUserAsync(int userId, UpdateUserRequest request);
+    Task UpdateRoleAsync(int userId, int roleId, int requesterId);
     Task LockUserAsync(int userId);
     Task UnlockUserAsync(int userId);
     Task DeleteUserAsync(int userId);
@@ -55,13 +55,15 @@ public interface IFieldService
     Task<FieldResponse> GetByIdAsync(int fieldId);
     Task<FieldResponse> CreateAsync(int adminId, CreateFieldRequest request);
     Task<FieldResponse> UpdateAsync(int fieldId, int adminId, UpdateFieldRequest request);
+    /// <summary>
+    /// Upload ảnh sân, xóa ảnh cũ nếu có, lưu URL mới vào DB.
+    /// Trả về relative URL "/Uploads/fields/{guid}.ext".
+    /// </summary>
+    Task<string> UploadImageAsync(int fieldId, IFormFile file, IWebHostEnvironment env);
     Task DeleteAsync(int fieldId);
-
     Task<List<FieldScheduleResponse>> GetScheduleAsync(GetFieldScheduleRequest request);
     Task GenerateSlotsAsync(GenerateSlotsRequest request);
-
     Task<List<FieldPriceHistoryResponse>> GetPriceHistoryAsync(int fieldId);
-
     Task<List<FieldMaintenanceLogResponse>> GetMaintenanceLogsAsync(int fieldId);
     Task AddMaintenanceLogAsync(int fieldId, int createdBy, CreateMaintenanceRequest request);
 }
@@ -142,6 +144,7 @@ public interface IServiceService
     Task<ServiceResponse> GetByIdAsync(int serviceId);
     Task<ServiceResponse> CreateAsync(CreateServiceRequest request);
     Task<ServiceResponse> UpdateAsync(int serviceId, UpdateServiceRequest request);
+    Task<string> UploadImageAsync(int serviceId, IFormFile file, IWebHostEnvironment env);
     Task DeleteAsync(int serviceId);
 }
 
@@ -151,8 +154,8 @@ public interface IServiceService
 
 public interface ISupplierService
 {
-    Task<PagedResponse<SupplierResponse>> GetSuppliersAsync(string? search, int page, int pageSize);
     Task<SupplierResponse> GetByIdAsync(int supplierId);
+    Task<PagedResponse<SupplierResponse>> GetAllAsync(GetSuppliersRequest request);
     Task<SupplierResponse> CreateAsync(CreateSupplierRequest request);
     Task<SupplierResponse> UpdateAsync(int supplierId, UpdateSupplierRequest request);
     Task DeleteAsync(int supplierId);
@@ -160,20 +163,19 @@ public interface ISupplierService
 
 public interface IProductService
 {
-    Task<PagedResponse<ProductResponse>> GetProductsAsync(string? search, int page, int pageSize);
-    Task<List<ProductResponse>> GetLowStockAsync();
     Task<ProductResponse> GetByIdAsync(int productId);
+    Task<PagedResponse<ProductResponse>> GetAllAsync(GetProductsRequest request);
     Task<ProductResponse> CreateAsync(CreateProductRequest request);
-    // Nhận UpdateProductRequest thay vì raw entity khi implement
-    Task UpdateAsync(int productId, CreateProductRequest request);
+    Task<ProductResponse> UpdateAsync(int productId, UpdateProductRequest request);
+    Task DeleteAsync(int productId);
 }
 
 public interface IPurchaseOrderService
 {
-    Task<PagedResponse<PurchaseOrderResponse>> GetPurchaseOrdersAsync(int? statusId, int page, int pageSize);
     Task<PurchaseOrderResponse> GetByIdAsync(int purchaseOrderId);
-    Task<PurchaseOrderResponse> CreateAsync(CreatePurchaseOrderRequest request, int createdBy);
-    Task ConfirmAsync(int purchaseOrderId, int confirmedBy);
+    Task<PagedResponse<PurchaseOrderResponse>> GetAllAsync(GetPurchaseOrdersRequest request);
+    Task<PurchaseOrderResponse> CreateAsync(CreatePurchaseOrderRequest request, int createdByUserId);
+    Task ConfirmAsync(int purchaseOrderId, int confirmedByUserId);
     Task CancelAsync(int purchaseOrderId);
 }
 

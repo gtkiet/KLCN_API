@@ -143,6 +143,13 @@ public class UpdateUserRequest
     public int StatusId { get; set; } = 1;
 }
 
+public class UpdateRoleRequest
+{
+    [Required(ErrorMessage = "RoleId không được để trống.")]
+    [Range(2, 3, ErrorMessage = "Role hợp lệ: 2=Staff, 3=Customer.")]
+    public int RoleId { get; set; }
+}
+
 // ================================================================
 // Fields
 // ================================================================
@@ -354,14 +361,26 @@ public class UpdateServiceRequest
 // ================================================================
 // Inventory
 // ================================================================
+public class GetSuppliersRequest
+{
+    public string? Search { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 20;
+}
 
 public class CreateSupplierRequest
 {
     [Required(ErrorMessage = "Tên nhà cung cấp không được để trống.")]
-    [MaxLength(100)] public string Name { get; set; } = string.Empty;
+    [MaxLength(100, ErrorMessage = "Tên không vượt quá 100 ký tự.")]
+    public string Name { get; set; } = null!;
+
     [MaxLength(100)] public string? ContactName { get; set; }
-    [Phone][MaxLength(20)] public string? Phone { get; set; }
-    [EmailAddress][MaxLength(100)] public string? Email { get; set; }
+    [MaxLength(20)] public string? Phone { get; set; }
+
+    [MaxLength(100)]
+    [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
+    public string? Email { get; set; }
+
     [MaxLength(255)] public string? Address { get; set; }
 }
 
@@ -369,31 +388,84 @@ public class UpdateSupplierRequest
 {
     [MaxLength(100)] public string? Name { get; set; }
     [MaxLength(100)] public string? ContactName { get; set; }
-    [Phone][MaxLength(20)] public string? Phone { get; set; }
-    [EmailAddress][MaxLength(100)] public string? Email { get; set; }
+    [MaxLength(20)] public string? Phone { get; set; }
+
+    [MaxLength(100)]
+    [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
+    public string? Email { get; set; }
+
     [MaxLength(255)] public string? Address { get; set; }
+}
+
+// ================================================================
+// Product
+// ================================================================
+
+public class GetProductsRequest
+{
+    public string? Search { get; set; }
+    public bool? LowStockOnly { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 20;
 }
 
 public class CreateProductRequest
 {
     [Required(ErrorMessage = "Tên sản phẩm không được để trống.")]
-    [MaxLength(100)] public string Name { get; set; } = string.Empty;
+    [MaxLength(100, ErrorMessage = "Tên không vượt quá 100 ký tự.")]
+    public string Name { get; set; } = null!;
+
     [MaxLength(50)] public string? Unit { get; set; }
-    [Range(0, int.MaxValue)] public int MinQty { get; set; } = 5;
+
+    [Range(0, int.MaxValue, ErrorMessage = "Tồn kho ban đầu không được âm.")]
+    public int InitialStock { get; set; } = 0;
+
+    [Range(0, int.MaxValue, ErrorMessage = "Mức cảnh báo không được âm.")]
+    public int MinQty { get; set; } = 5;
+}
+
+public class UpdateProductRequest
+{
+    [MaxLength(100)] public string? Name { get; set; }
+    [MaxLength(50)] public string? Unit { get; set; }
+
+    [Range(0, int.MaxValue, ErrorMessage = "Mức cảnh báo không được âm.")]
+    public int? MinQty { get; set; }
+}
+
+// ================================================================
+// PurchaseOrder
+// ================================================================
+
+public class GetPurchaseOrdersRequest
+{
+    public int? SupplierId { get; set; }
+    public int? StatusId { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 20;
 }
 
 public class CreatePurchaseOrderRequest
 {
-    [Required] public int SupplierId { get; set; }
+    [Required(ErrorMessage = "SupplierId không được để trống.")]
+    public int SupplierId { get; set; }
+
     [MaxLength(500)] public string? Note { get; set; }
-    [Required][MinLength(1)] public List<PurchaseOrderDetailItem> Items { get; set; } = [];
+
+    [Required(ErrorMessage = "Danh sách sản phẩm không được để trống.")]
+    [MinLength(1, ErrorMessage = "Phải có ít nhất 1 sản phẩm.")]
+    public List<PurchaseOrderItemRequest> Items { get; set; } = [];
 }
 
-public class PurchaseOrderDetailItem
+public class PurchaseOrderItemRequest
 {
     [Required] public int ProductId { get; set; }
-    [Range(1, int.MaxValue)] public int Quantity { get; set; }
-    [Range(0.01, double.MaxValue)] public decimal UnitPrice { get; set; }
+
+    [Range(1, int.MaxValue, ErrorMessage = "Số lượng phải >= 1.")]
+    public int Quantity { get; set; }
+
+    [Range(0.01, double.MaxValue, ErrorMessage = "Đơn giá phải > 0.")]
+    public decimal UnitPrice { get; set; }
 }
 
 // ================================================================

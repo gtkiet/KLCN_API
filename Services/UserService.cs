@@ -1,5 +1,5 @@
-﻿using BCrypt.Net;
-using KLCN_API.Helpers;
+﻿using KLCN_API.Helpers;
+using KLCN_API.Mappers;
 using KLCN_API.Middleware;
 using KLCN_API.Models.DTOs.Request;
 using KLCN_API.Models.DTOs.Response;
@@ -20,7 +20,6 @@ public class UserService : IUserService
     {
         var user = await _userRepo.GetByIdAsync(userId)
             ?? throw new NotFoundException("Người dùng", userId);
-
         return UserMapper.ToDetailResponse(user);
     }
 
@@ -41,85 +40,114 @@ public class UserService : IUserService
 
     public async Task<UserDetailResponse> CreateStaffAsync(CreateStaffRequest request)
     {
-        var existed = await _userRepo.GetByEmailAsync(request.Email);
-        if (existed != null)
-            throw new BusinessException("Email đã tồn tại trong hệ thống.", 400);
+        if (await _userRepo.GetByEmailAsync(request.Email) is not null)
+            throw new ConflictException("Email đã tồn tại trong hệ thống.");
 
-        var existedPhone = await _userRepo.GetByPhoneAsync(request.Phone);
-        if (existedPhone != null)
-            throw new BusinessException("Số điện thoại đã tồn tại trong hệ thống.", 400);
+        if (await _userRepo.GetByPhoneAsync(request.Phone) is not null)
+            throw new ConflictException("Số điện thoại đã tồn tại trong hệ thống.");
 
         var user = new User
         {
-            FullName = request.FullName,
+            FullName = request.FullName.Trim(),
             Email = request.Email.Trim().ToLower(),
-            Phone = request.Phone,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            Phone = request.Phone.Trim(),
+            PasswordHash = PasswordHelper.HashPassword(request.Password),
             RoleId = (int)RoleEnum.Staff,
-            StatusId = request.StatusId <= 0 ? (int)UserStatusEnum.Active : request.StatusId,
+            StatusId = (int)UserStatusEnum.Active,
             CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
             IsDeleted = false
         };
 
         await _userRepo.CreateAsync(user);
 
-        var created = await _userRepo.GetByIdAsync(user.UserId)
-            ?? throw new NotFoundException("Người dùng", user.UserId);
-
-        return UserMapper.ToDetailResponse(created);
+        return UserMapper.ToDetailResponse(
+            await _userRepo.GetByIdAsync(user.UserId)
+                ?? throw new NotFoundException("Người dùng", user.UserId));
     }
 
-    public async Task<UserDetailResponse> CreateCustomerByAdminAsync(CreateCustomerByAdminRequest request)
+    public async Task<UserDetailResponse> CreateCustomerByAdminAsync(
+        CreateCustomerByAdminRequest request)
     {
-        var existed = await _userRepo.GetByEmailAsync(request.Email);
-        if (existed != null)
-            throw new BusinessException("Email đã tồn tại trong hệ thống.", 400);
+        if (await _userRepo.GetByEmailAsync(request.Email) is not null)
+            throw new ConflictException("Email đã tồn tại trong hệ thống.");
+
+        if (await _userRepo.GetByPhoneAsync(request.Phone) is not null)
+            throw new ConflictException("Số điện thoại đã tồn tại trong hệ thống.");
 
         var user = new User
         {
-            FullName = request.FullName,
+            FullName = request.FullName.Trim(),
             Email = request.Email.Trim().ToLower(),
-            Phone = request.Phone,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            Phone = request.Phone.Trim(),
+            PasswordHash = PasswordHelper.HashPassword(request.Password),
             RoleId = (int)RoleEnum.Customer,
-            StatusId = request.StatusId <= 0 ? (int)UserStatusEnum.Active : request.StatusId,
+            StatusId = (int)UserStatusEnum.Active,
             CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
             IsDeleted = false
         };
 
         await _userRepo.CreateAsync(user);
 
-        var created = await _userRepo.GetByIdAsync(user.UserId)
-            ?? throw new NotFoundException("Người dùng", user.UserId);
-
-        return UserMapper.ToDetailResponse(created);
+        return UserMapper.ToDetailResponse(
+            await _userRepo.GetByIdAsync(user.UserId)
+                ?? throw new NotFoundException("Người dùng", user.UserId));
     }
 
-    public async Task<UserDetailResponse> UpdateUserAsync(int userId, UpdateUserRequest request)
+    //public async Task<UserDetailResponse> UpdateUserAsync(int userId, UpdateUserRequest request)
+    //{
+    //    var user = await _userRepo.GetByIdAsync(userId)
+    //        ?? throw new NotFoundException("Người dùng", userId);
+
+    //    // Kiểm tra duplicate email/phone — bỏ qua nếu là chính user đó
+    //    var byEmail = await _userRepo.GetByEmailAsync(request.Email);
+    //    if (byEmail is not null && byEmail.UserId != userId)
+    //        throw new ConflictException("Email đã tồn tại trong hệ thống.");
+
+    //    var byPhone = await _userRepo.GetByPhoneAsync(request.Phone);
+    //    if (byPhone is not null && byPhone.UserId != userId)
+    //        throw new ConflictException("Số điện thoại đã tồn tại trong hệ thống.");
+
+    //    user.FullName = request.FullName.Trim();
+    //    user.Email = request.Email.Trim().ToLower();
+    //    user.Phone = request.Phone.Trim();
+    //    user.StatusId = request.StatusId > 0 ? request.StatusId : user.StatusId;
+    //    user.UpdatedAt = DateTime.UtcNow;
+
+    //    await _userRepo.UpdateAsync(user);
+
+    //    return UserMapper.ToDetailResponse(
+    //        await _userRepo.GetByIdAsync(userId)
+    //            ?? throw new NotFoundException("Người dùng", userId));
+    //}
+
+    /// <summary>
+    /// Đổi role user — chỉ Admin, không thể đổi role của chính mình,
+    /// không thể gán/bỏ role Admin.
+    /// requesterId: userId của Admin đang thực hiện.
+    /// </summary>
+    public async Task UpdateRoleAsync(int userId, int roleId, int requesterId)
     {
+        if (userId == requesterId)
+            throw new BusinessException("Không thể đổi role của chính mình.", 400);
+
+        if (!Enum.IsDefined(typeof(RoleEnum), roleId))
+            throw new BusinessException("Role không hợp lệ.", 400);
+
+        if (roleId == (int)RoleEnum.Admin)
+            throw new ForbiddenException("Không thể gán role Admin.");
+
         var user = await _userRepo.GetByIdAsync(userId)
             ?? throw new NotFoundException("Người dùng", userId);
 
-        var duplicate = await _userRepo.GetByEmailAsync(request.Email);
-        if (duplicate != null && duplicate.UserId != userId)
-            throw new BusinessException("Email đã tồn tại trong hệ thống.", 400);
+        if (user.RoleId == (int)RoleEnum.Admin)
+            throw new ForbiddenException("Không thể thay đổi role của tài khoản Admin.");
 
-        var duplicatePhone = await _userRepo.GetByPhoneAsync(request.Phone);
-        if (duplicatePhone != null && duplicatePhone.UserId != userId)
-            throw new BusinessException("Số điện thoại đã tồn tại trong hệ thống.", 400);
+        if (user.RoleId == roleId)
+            throw new BusinessException("User đã có role này rồi.", 400);
 
-        user.FullName = request.FullName;
-        user.Email = request.Email.Trim().ToLower();
-        user.Phone = request.Phone;
-        user.StatusId = request.StatusId <= 0 ? user.StatusId : request.StatusId;
-        user.UpdatedAt = DateTime.UtcNow;
-
-        await _userRepo.UpdateAsync(user);
-
-        var updated = await _userRepo.GetByIdAsync(userId)
-            ?? throw new NotFoundException("Người dùng", userId);
-
-        return UserMapper.ToDetailResponse(updated);
+        await _userRepo.UpdateRoleAsync(userId, roleId);
     }
 
     public async Task LockUserAsync(int userId)

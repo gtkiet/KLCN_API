@@ -26,11 +26,11 @@ public class UserRepository : IUserRepository
             .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower() && !u.IsDeleted);
 
     public async Task<User?> GetByPhoneAsync(string phone)
-    => await _ctx.Users
-        .Include(u => u.Role)
-        .Include(u => u.Status)
-        .Include(u => u.Profile)
-        .FirstOrDefaultAsync(u => u.Phone == phone && !u.IsDeleted);
+        => await _ctx.Users
+            .Include(u => u.Role)
+            .Include(u => u.Status)
+            .Include(u => u.Profile)
+            .FirstOrDefaultAsync(u => u.Phone == phone && !u.IsDeleted);
 
     public async Task<(List<User> Items, int TotalCount)> GetUsersAsync(
         string? search, int? roleId, int? statusId, int page, int pageSize)
@@ -119,6 +119,13 @@ public class UserRepository : IUserRepository
             .Where(u => u.UserId == userId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(u => u.StatusId, statusId)
+                .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+
+    public async Task UpdateRoleAsync(int userId, int roleId)
+        => await _ctx.Users
+            .Where(u => u.UserId == userId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.RoleId, roleId)
                 .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
 
     public async Task SoftDeleteAsync(int userId)

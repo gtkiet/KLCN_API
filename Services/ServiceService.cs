@@ -1,4 +1,5 @@
-﻿using KLCN_API.Middleware;
+﻿using KLCN_API.Helpers;
+using KLCN_API.Middleware;
 using KLCN_API.Models.DTOs.Request;
 using KLCN_API.Models.DTOs.Response;
 using KLCN_API.Models.Entities;
@@ -6,10 +7,6 @@ using KLCN_API.Repositories.Interfaces;
 using KLCN_API.Services.Interfaces;
 
 namespace KLCN_API.Services;
-
-// ================================================================
-// ServiceService
-// ================================================================
 
 public class ServiceService : IServiceService
 {
@@ -37,7 +34,7 @@ public class ServiceService : IServiceService
             Name = request.Name.Trim(),
             Description = request.Description?.Trim(),
             Price = request.Price,
-            ImageUrl = request.ImageUrl,
+            ImageUrl = null,   // ảnh upload qua endpoint riêng
             IsAvailable = true,
             UpdatedAt = DateTime.UtcNow
         };
@@ -54,8 +51,8 @@ public class ServiceService : IServiceService
         if (request.Name is not null) svc.Name = request.Name.Trim();
         if (request.Description is not null) svc.Description = request.Description.Trim();
         if (request.Price.HasValue) svc.Price = request.Price.Value;
-        if (request.ImageUrl is not null) svc.ImageUrl = request.ImageUrl;
         if (request.IsAvailable.HasValue) svc.IsAvailable = request.IsAvailable.Value;
+        // ImageUrl không update qua đây — dùng endpoint /image riêng
 
         await _serviceRepo.UpdateAsync(svc);
         return Map(svc);
@@ -66,6 +63,27 @@ public class ServiceService : IServiceService
         _ = await _serviceRepo.GetByIdAsync(serviceId)
             ?? throw new NotFoundException("Dịch vụ", serviceId);
         await _serviceRepo.SoftDeleteAsync(serviceId);
+    }
+
+    /// <summary>
+    /// Upload ảnh dịch vụ: lưu file vào Uploads/services/,
+    /// xóa ảnh cũ nếu có, cập nhật ImageUrl trong DB.
+    /// </summary>
+    public async Task<string> UploadImageAsync(
+        int serviceId, IFormFile file, IWebHostEnvironment env)
+    {
+        var svc = await _serviceRepo.GetByIdAsync(serviceId)
+            ?? throw new NotFoundException("Dịch vụ", serviceId);
+
+        var newUrl = await ImageUploadHelper.SaveAsync(
+            file, env.ContentRootPath, subfolder: "services");
+
+        ImageUploadHelper.DeleteIfExists(svc.ImageUrl, env.ContentRootPath);
+
+        svc.ImageUrl = newUrl;
+        await _serviceRepo.UpdateAsync(svc);
+
+        return newUrl;
     }
 
     private static ServiceResponse Map(Service s) => new()
