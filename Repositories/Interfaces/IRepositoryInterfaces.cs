@@ -9,6 +9,7 @@ namespace KLCN_API.Repositories.Interfaces;
 public interface IAuthRepository
 {
     Task<User?> GetByEmailAsync(string email);
+    Task<User?> GetByPhoneAsync(string phone);
     Task<bool> EmailExistsAsync(string email);
     Task<bool> PhoneExistsAsync(string phone);
     Task<User> CreateUserAsync(User user, Profile profile);
@@ -16,6 +17,23 @@ public interface IAuthRepository
     Task AddRefreshTokenAsync(RefreshToken token);
     Task RevokeRefreshTokenAsync(string token);
     Task RevokeAllRefreshTokensAsync(int userId);
+    /// <summary>Lưu OTP (đã hash) và thời gian hết hạn cho user.</summary>
+    Task SaveOtpAsync(int userId, string otpHash, DateTime expiresAt);
+
+    /// <summary>Lấy OTP record còn hiệu lực của user.</summary>
+    Task<(string OtpHash, DateTime ExpiresAt)?> GetValidOtpAsync(int userId);
+
+    /// <summary>Xoá OTP sau khi đã dùng hoặc hết hạn.</summary>
+    Task ClearOtpAsync(int userId);
+
+    /// <summary>Lưu reset token (đã hash) sau khi verify OTP thành công.</summary>
+    Task SaveResetTokenAsync(int userId, string tokenHash, DateTime expiresAt);
+
+    /// <summary>Lấy reset token record còn hiệu lực.</summary>
+    Task<(int UserId, DateTime ExpiresAt)?> GetValidResetTokenAsync(string tokenHash);
+
+    /// <summary>Xoá reset token sau khi đã dùng.</summary>
+    Task ClearResetTokenAsync(string tokenHash);
 }
 
 // ================================================================

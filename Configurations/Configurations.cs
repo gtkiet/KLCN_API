@@ -33,3 +33,27 @@ public class MoMoSettings
     public string IpnUrl { get; set; } = null!;
     public string RequestType { get; set; } = "payWithMethod";
 }
+
+public class EmailSettings
+{
+    public string Host { get; set; } = null!;
+    public int Port { get; set; } = 587;
+    public bool EnableSsl { get; set; } = true;
+    public string SenderEmail { get; set; } = null!;
+    public string SenderName { get; set; } = null!;
+    public string AppPassword { get; set; } = null!;
+}
+
+public class FrontendSettings
+{
+    public string PaymentSuccessUrl { get; set; } = null!;
+    public string PaymentFailedUrl { get; set; } = null!;
+
+    /// <summary>Tạo URL success với bookingId.</summary>
+    public string BuildSuccessUrl(int bookingId)
+        => string.Format(PaymentSuccessUrl, bookingId);
+
+    /// <summary>Tạo URL failed với bookingId.</summary>
+    public string BuildFailedUrl(int bookingId)
+        => string.Format(PaymentFailedUrl, bookingId);
+}

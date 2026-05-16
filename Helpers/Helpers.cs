@@ -2,10 +2,13 @@
 using KLCN_API.Middleware;
 using KLCN_API.Models.DTOs.Response;
 using KLCN_API.Models.Enums;
+using MailKit.Net.Smtp;
+using MailKit.Security;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.IdentityModel.Tokens;
+using MimeKit;
 using System.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
@@ -620,4 +623,52 @@ public class MoMoHelper
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(key));
         return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(data))).ToLower();
     }
+}
+
+public class EmailHelper
+{
+    private readonly EmailSettings _settings;
+
+    public EmailHelper(EmailSettings settings) => _settings = settings;
+
+    /// <summary>
+    /// Gửi OTP đặt lại mật khẩu qua Gmail SMTP.
+    /// OTP hết hạn sau 10 phút — thông tin hiển thị trong body email.
+    /// </summary>
+    public async Task SendOtpAsync(string toEmail, string toName, string otp)
+    {
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress(_settings.SenderName, _settings.SenderEmail));
+        message.To.Add(new MailboxAddress(toName, toEmail));
+        message.Subject = "[SportPlus] Mã xác nhận đặt lại mật khẩu";
+
+        message.Body = new TextPart("html")
+        {
+            Text = BuildOtpEmailBody(toName, otp)
+        };
+
+        using var client = new SmtpClient();
+
+        // Gmail SMTP: port 587 + STARTTLS
+        await client.ConnectAsync(_settings.Host, _settings.Port, SecureSocketOptions.StartTls);
+        await client.AuthenticateAsync(_settings.SenderEmail, _settings.AppPassword);
+        await client.SendAsync(message);
+        await client.DisconnectAsync(quit: true);
+    }
+
+    private static string BuildOtpEmailBody(string name, string otp) => $"""
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e0e0e0;border-radius:8px;">
+          <h2 style="color:#2d7a3a;">SportPlus</h2>
+          <p>Xin chào <strong>{name}</strong>,</p>
+          <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>
+          <p>Mã OTP của bạn là:</p>
+          <div style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#2d7a3a;text-align:center;padding:16px 0;">
+            {otp}
+          </div>
+          <p style="color:#888;font-size:13px;">Mã có hiệu lực trong <strong>10 phút</strong>. Không chia sẻ mã này với bất kỳ ai.</p>
+          <p style="color:#888;font-size:13px;">Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này.</p>
+          <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0;">
+          <p style="color:#bbb;font-size:12px;text-align:center;">© 2026 SportPlus</p>
+        </div>
+        """;
 }

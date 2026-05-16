@@ -4,6 +4,7 @@ using KLCN_API.Models.DTOs.Response;
 using KLCN_API.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Request = KLCN_API.Models.DTOs.Request;
 
 namespace KLCN_API.Controllers;
 
@@ -27,7 +28,7 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<LoginResponse>.Ok(result, "Đăng ký thành công."));
     }
 
-    /// <summary>Đăng nhập.</summary>
+    /// <summary>Đăng nhập bằng email hoặc số điện thoại.</summary>
     [HttpPost("login")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<LoginResponse>), 200)]
@@ -55,8 +56,53 @@ public class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), 200)]
     public async Task<IActionResult> Logout()
     {
-        var userId = User.GetUserId();
-        await _authService.LogoutAsync(userId);
+        await _authService.LogoutAsync(User.GetUserId());
         return Ok(ApiResponse.Ok("Đăng xuất thành công."));
+    }
+
+    // ── Password reset ────────────────────────────────────────────
+
+    /// <summary>
+    /// Bước 1 — Yêu cầu gửi OTP về email.
+    /// Luôn trả về 200 kể cả email không tồn tại (tránh user enumeration).
+    /// OTP có hiệu lực 10 phút.
+    /// </summary>
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        await _authService.ForgotPasswordAsync(request);
+        return Ok(ApiResponse.Ok(
+            "Nếu email tồn tại trong hệ thống, mã OTP sẽ được gửi đến hộp thư của bạn."));
+    }
+
+    /// <summary>
+    /// Bước 2 — Xác minh OTP.
+    /// Trả về reset token dùng một lần, có hiệu lực 15 phút.
+    /// </summary>
+    [HttpPost("verify-otp")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<VerifyOtpResponse>), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
+    public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest request)
+    {
+        var result = await _authService.VerifyOtpAsync(request);
+        return Ok(ApiResponse<VerifyOtpResponse>.Ok(result, "Xác minh OTP thành công."));
+    }
+
+    /// <summary>
+    /// Bước 3 — Đặt lại mật khẩu bằng reset token từ bước 2.
+    /// Sau khi thành công, toàn bộ thiết bị đang đăng nhập sẽ bị đăng xuất.
+    /// </summary>
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        await _authService.ResetPasswordAsync(request);
+        return Ok(ApiResponse.Ok("Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại."));
     }
 }

@@ -31,9 +31,9 @@ public class RegisterRequest
 
 public class LoginRequest
 {
-    [Required(ErrorMessage = "Email không được để trống.")]
-    [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
-    public string Email { get; set; } = string.Empty;
+    [Required(ErrorMessage = "Email hoặc số điện thoại không được để trống.")]
+    [MaxLength(100)]
+    public string Identifier { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Mật khẩu không được để trống.")]
     public string Password { get; set; } = string.Empty;
@@ -46,6 +46,44 @@ public class RefreshTokenRequest
 
     [Required(ErrorMessage = "Refresh token không được để trống.")]
     public string RefreshToken { get; set; } = string.Empty;
+}
+
+/// <summary>Bước 1: Yêu cầu gửi OTP về email.</summary>
+public class ForgotPasswordRequest
+{
+    [Required(ErrorMessage = "Email không được để trống.")]
+    [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
+    [MaxLength(100)]
+    public string Email { get; set; } = string.Empty;
+}
+
+/// <summary>Bước 2: Xác minh OTP — trả về reset token để dùng ở bước 3.</summary>
+public class VerifyOtpRequest
+{
+    [Required(ErrorMessage = "Email không được để trống.")]
+    [EmailAddress]
+    [MaxLength(100)]
+    public string Email { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Mã OTP không được để trống.")]
+    [StringLength(6, MinimumLength = 6, ErrorMessage = "OTP phải đúng 6 ký tự.")]
+    public string Otp { get; set; } = string.Empty;
+}
+
+/// <summary>Bước 3: Đặt lại mật khẩu bằng reset token từ bước 2.</summary>
+public class ResetPasswordRequest
+{
+    [Required(ErrorMessage = "Reset token không được để trống.")]
+    public string ResetToken { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Mật khẩu mới không được để trống.")]
+    [MinLength(6, ErrorMessage = "Mật khẩu tối thiểu 6 ký tự.")]
+    [MaxLength(100)]
+    public string NewPassword { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Xác nhận mật khẩu không được để trống.")]
+    [Compare(nameof(NewPassword), ErrorMessage = "Mật khẩu xác nhận không khớp.")]
+    public string ConfirmPassword { get; set; } = string.Empty;
 }
 
 // ================================================================

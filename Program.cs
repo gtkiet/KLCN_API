@@ -23,6 +23,8 @@ builder.Services.AddSwaggerWithAuth();
 builder.Services.AddPaymentGateways(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddRepositories();
+builder.Services.AddEmailService(builder.Configuration);
+builder.Services.AddFrontendSettings(builder.Configuration);
 
 // Background jobs thay thế SQL Agent (dùng khi host không hỗ trợ SQL Agent)
 builder.Services.AddHostedService<ReleaseExpiredSlotsJob>();

@@ -27,6 +27,16 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    public static IServiceCollection AddEmailService(
+    this IServiceCollection services, IConfiguration config)
+    {
+        var emailSettings = config.GetSection("EmailSettings").Get<EmailSettings>()
+            ?? throw new InvalidOperationException("Thieu EmailSettings trong appsettings.");
+        services.AddSingleton(emailSettings);
+        services.AddSingleton<EmailHelper>();
+        return services;
+    }
+
     public static IServiceCollection AddJwtAuthentication(
         this IServiceCollection services, IConfiguration config)
     {
@@ -188,10 +198,19 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+    public static IServiceCollection AddFrontendSettings(
+    this IServiceCollection services, IConfiguration config)
+    {
+        var settings = config.GetSection("FrontendSettings").Get<FrontendSettings>()
+            ?? throw new InvalidOperationException("Thieu FrontendSettings trong appsettings.");
+        services.AddSingleton(settings);
+        return services;
+    }
 
     public static IServiceCollection AddApplicationServices(
         this IServiceCollection services)
     {
+        services.AddMemoryCache();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IProfileService, ProfileService>();

@@ -15,11 +15,15 @@ namespace KLCN_API.Controllers;
 public class FieldsController : ControllerBase
 {
     private readonly IFieldService _fieldService;
+    private readonly IWebHostEnvironment _env;
 
-    public FieldsController(IFieldService fieldService)
-        => _fieldService = fieldService;
+    public FieldsController(IFieldService fieldService, IWebHostEnvironment env)
+    {
+        _fieldService = fieldService;
+        _env = env;
+    }
 
-    // ── CRUD ─────────────────────────────────────────────────────
+    // ── CRUD ──────────────────────────────────────────────────────
 
     /// <summary>Lấy danh sách sân có filter + phân trang — Public.</summary>
     [HttpGet]
@@ -49,8 +53,7 @@ public class FieldsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), 400)]
     public async Task<IActionResult> Create([FromBody] CreateFieldRequest request)
     {
-        var adminId = User.GetUserId();
-        var result = await _fieldService.CreateAsync(adminId, request);
+        var result = await _fieldService.CreateAsync(User.GetUserId(), request);
         return Ok(ApiResponse<FieldResponse>.Ok(result, "Tạo sân thành công."));
     }
 
@@ -60,10 +63,10 @@ public class FieldsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<FieldResponse>), 200)]
     [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
-    public async Task<IActionResult> Update(int fieldId, [FromBody] UpdateFieldRequest request)
+    public async Task<IActionResult> Update(
+        int fieldId, [FromBody] UpdateFieldRequest request)
     {
-        var adminId = User.GetUserId();
-        var result = await _fieldService.UpdateAsync(fieldId, adminId, request);
+        var result = await _fieldService.UpdateAsync(fieldId, User.GetUserId(), request);
         return Ok(ApiResponse<FieldResponse>.Ok(result, "Cập nhật sân thành công."));
     }
 
@@ -78,13 +81,34 @@ public class FieldsController : ControllerBase
         return Ok(ApiResponse.Ok("Xóa sân thành công."));
     }
 
-    // ── Schedule & slots ─────────────────────────────────────────
+    // ── Image upload ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Upload ảnh sân — Admin.
+    /// Gửi multipart/form-data với field tên "file".
+    /// Trả về imageUrl dạng "/Uploads/fields/{guid}.ext" (relative).
+    /// Frontend tự ghép host khi hiển thị.
+    /// Ảnh cũ sẽ bị xóa tự động nếu tồn tại.
+    /// </summary>
+    [HttpPost("{fieldId:int}/image")]
+    [AuthorizeRoles(RoleEnum.Admin)]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(ApiResponse<object>), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
+    [ProducesResponseType(typeof(ApiResponse), 404)]
+    public async Task<IActionResult> UploadImage(
+        int fieldId, IFormFile file)
+    {
+        var imageUrl = await _fieldService.UploadImageAsync(fieldId, file, _env);
+        return Ok(ApiResponse<object>.Ok(new { imageUrl }, "Upload ảnh thành công."));
+    }
+
+    // ── Schedule & slots ──────────────────────────────────────────
 
     /// <summary>Lấy lịch sân theo ngày — Public.</summary>
     [HttpGet("schedule")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiResponse<List<FieldScheduleResponse>>), 200)]
-    [ProducesResponseType(typeof(ApiResponse), 400)]
     public async Task<IActionResult> GetSchedule([FromQuery] GetFieldScheduleRequest request)
     {
         var result = await _fieldService.GetScheduleAsync(request);
@@ -130,7 +154,7 @@ public class FieldsController : ControllerBase
 
     /// <summary>
     /// Tạo log bảo trì sân — Admin.
-    /// Nếu StartDate là hôm nay, sân sẽ tự động chuyển sang trạng thái Bảo trì.
+    /// Nếu StartDate là hôm nay, sân tự động chuyển sang trạng thái Bảo trì.
     /// </summary>
     [HttpPost("{fieldId:int}/maintenance")]
     [AuthorizeRoles(RoleEnum.Admin)]
@@ -140,8 +164,7 @@ public class FieldsController : ControllerBase
     public async Task<IActionResult> AddMaintenance(
         int fieldId, [FromBody] CreateMaintenanceRequest request)
     {
-        var createdBy = User.GetUserId();
-        await _fieldService.AddMaintenanceLogAsync(fieldId, createdBy, request);
+        await _fieldService.AddMaintenanceLogAsync(fieldId, User.GetUserId(), request);
         return Ok(ApiResponse.Ok("Ghi nhận bảo trì thành công."));
     }
 }

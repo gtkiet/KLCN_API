@@ -1,5 +1,5 @@
-﻿using KLCN_API.Helpers;
-using KLCN_API.Middleware;
+﻿using KLCN_API.Configurations;
+using KLCN_API.Helpers;
 using KLCN_API.Models.DTOs.Response;
 using KLCN_API.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -15,22 +15,25 @@ public class PaymentsController : ControllerBase
     private readonly IPaymentService _paymentService;
     private readonly VNPayHelper _vnpay;
     private readonly MoMoHelper _momo;
+    private readonly FrontendSettings _frontend;
 
     public PaymentsController(
         IPaymentService paymentService,
         VNPayHelper vnpay,
-        MoMoHelper momo)
+        MoMoHelper momo,
+        FrontendSettings frontend)
     {
         _paymentService = paymentService;
         _vnpay = vnpay;
         _momo = momo;
+        _frontend = frontend;
     }
 
     // ── VNPay ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// Tạo URL thanh toán VNPay — Customer đang chờ đặt cọc (StatusId=5)
-    /// hoặc thanh toán phần còn lại (StatusId=2).
+    /// Tạo URL thanh toán VNPay.
+    /// Booking phải ở StatusId=5 (chờ cọc) hoặc StatusId=2 (confirmed, chờ thanh toán full).
     /// </summary>
     [HttpPost("vnpay/create/{bookingId:int}")]
     [Authorize]
@@ -41,7 +44,7 @@ public class PaymentsController : ControllerBase
     {
         var booking = await _paymentService.GetBookingForPaymentAsync(bookingId);
         var ip = HttpContext.Connection.RemoteIpAddress?.MapToIPv4().ToString()
-                 ?? "127.0.0.1";
+                      ?? "127.0.0.1";
 
         var url = _vnpay.CreatePaymentUrl(
             bookingId,
@@ -53,8 +56,8 @@ public class PaymentsController : ControllerBase
     }
 
     /// <summary>
-    /// IPN callback — VNPay gọi server-to-server (GET).
-    /// Không yêu cầu JWT. Phải trả đúng format VNPay yêu cầu.
+    /// IPN — VNPay gọi server-to-server sau khi giao dịch hoàn tất.
+    /// Không yêu cầu JWT. Đây là nơi DUY NHẤT cập nhật DB.
     /// </summary>
     [HttpGet("vnpay/ipn")]
     [AllowAnonymous]
@@ -66,14 +69,13 @@ public class PaymentsController : ControllerBase
         if (!isSuccess)
             return Ok(new { RspCode = "00", Message = "Confirmed failure" });
 
-        // txnRef = "{bookingId}_{timestamp}"
         if (!int.TryParse(txnRef.Split('_')[0], out var bookingId))
             return Ok(new { RspCode = "01", Message = "Invalid order" });
 
         if (!decimal.TryParse(Request.Query["vnp_Amount"].ToString(), out var rawAmount))
             return Ok(new { RspCode = "01", Message = "Invalid amount" });
 
-        var amount = rawAmount / 100; // VNPay gửi đơn vị VNĐ * 100
+        var amount = rawAmount / 100; // VNPay gửi VNĐ * 100
         var txnCode = Request.Query["vnp_TransactionNo"].ToString();
 
         await _paymentService.RecordOnlinePaymentAsync(
@@ -83,28 +85,28 @@ public class PaymentsController : ControllerBase
     }
 
     /// <summary>
-    /// Return URL — VNPay redirect trình duyệt về sau khi khách thanh toán.
-    /// Chỉ hiển thị kết quả, KHÔNG cập nhật DB (IPN đảm nhận việc đó).
+    /// Return — VNPay redirect trình duyệt / deep link về sau khi thanh toán.
+    /// KHÔNG cập nhật DB — chỉ redirect sang frontend/app để hiển thị kết quả.
     /// </summary>
     [HttpGet("vnpay/return")]
     [AllowAnonymous]
     public IActionResult VNPayReturn()
     {
         var isValid = _vnpay.ValidateSignature(Request.Query, out var txnRef, out var isSuccess);
-        var bookingId = txnRef.Split('_').FirstOrDefault() ?? "0";
+        var bookingId = int.TryParse(txnRef.Split('_')[0], out var id) ? id : 0;
 
-        var frontendUrl = isValid && isSuccess
-            ? $"/booking/{bookingId}/success"
-            : $"/booking/{bookingId}/failed";
+        var redirectUrl = isValid && isSuccess
+            ? _frontend.BuildSuccessUrl(bookingId)
+            : _frontend.BuildFailedUrl(bookingId);
 
-        return Redirect(frontendUrl);
+        return Redirect(redirectUrl);
     }
 
     // ── MoMo ──────────────────────────────────────────────────────
 
     /// <summary>
-    /// Tạo URL thanh toán MoMo — Customer đang chờ đặt cọc (StatusId=5)
-    /// hoặc thanh toán phần còn lại (StatusId=2).
+    /// Tạo URL thanh toán MoMo.
+    /// Booking phải ở StatusId=5 (chờ cọc) hoặc StatusId=2 (confirmed, chờ thanh toán full).
     /// </summary>
     [HttpPost("momo/create/{bookingId:int}")]
     [Authorize]
@@ -124,8 +126,8 @@ public class PaymentsController : ControllerBase
     }
 
     /// <summary>
-    /// IPN callback — MoMo gọi server-to-server (POST JSON).
-    /// Không yêu cầu JWT.
+    /// IPN — MoMo gọi server-to-server (POST JSON) sau khi giao dịch hoàn tất.
+    /// Không yêu cầu JWT. Đây là nơi DUY NHẤT cập nhật DB.
     /// </summary>
     [HttpPost("momo/ipn")]
     [AllowAnonymous]
@@ -170,8 +172,8 @@ public class PaymentsController : ControllerBase
     }
 
     /// <summary>
-    /// Return URL — MoMo redirect trình duyệt về sau khi thanh toán.
-    /// Chỉ hiển thị kết quả.
+    /// Return — MoMo redirect trình duyệt / deep link về sau khi thanh toán.
+    /// KHÔNG cập nhật DB — chỉ redirect sang frontend/app để hiển thị kết quả.
     /// </summary>
     [HttpGet("momo/return")]
     [AllowAnonymous]
@@ -180,10 +182,10 @@ public class PaymentsController : ControllerBase
     {
         var bookingId = MoMoHelper.ParseBookingId(orderId);
 
-        var frontendUrl = resultCode == 0
-            ? $"/booking/{bookingId}/success"
-            : $"/booking/{bookingId}/failed";
+        var redirectUrl = resultCode == 0
+            ? _frontend.BuildSuccessUrl(bookingId)
+            : _frontend.BuildFailedUrl(bookingId);
 
-        return Redirect(frontendUrl);
+        return Redirect(redirectUrl);
     }
 }

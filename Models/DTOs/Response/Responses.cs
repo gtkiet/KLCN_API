@@ -57,6 +57,16 @@ public class TokenResponse
     public DateTime ExpiresAt { get; set; }
 }
 
+/// <summary>Trả về sau khi verify OTP thành công.</summary>
+public class VerifyOtpResponse
+{
+    /// <summary>
+    /// Token tạm thời dùng để đặt lại mật khẩu ở bước 3.
+    /// Hết hạn sau 15 phút.
+    /// </summary>
+    public string ResetToken { get; set; } = string.Empty;
+}
+
 // ================================================================
 // Users & profile
 // ================================================================

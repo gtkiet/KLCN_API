@@ -22,7 +22,7 @@ public class FieldService : IFieldService
         _ctx = ctx;
     }
 
-    // ── CRUD ─────────────────────────────────────────────────────
+    // ── CRUD ──────────────────────────────────────────────────────
 
     public async Task<PagedResponse<FieldResponse>> GetFieldsAsync(GetFieldsRequest request)
     {
@@ -59,7 +59,7 @@ public class FieldService : IFieldService
             BasePrice = request.BasePrice,
             PeakPrice = request.PeakPrice,
             TypeId = request.TypeId,
-            ImageUrl = request.ImageUrl,   // null nếu chưa upload ảnh
+            ImageUrl = null, // upload ảnh qua endpoint riêng POST /{fieldId}/image
             StatusId = (int)FieldStatusEnum.Active,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -77,9 +77,9 @@ public class FieldService : IFieldService
 
         if (request.Name is not null) field.Name = request.Name.Trim();
         if (request.Description is not null) field.Description = request.Description.Trim();
-        if (request.ImageUrl is not null) field.ImageUrl = request.ImageUrl;
         if (request.TypeId.HasValue) field.TypeId = request.TypeId.Value;
         if (request.StatusId.HasValue) field.StatusId = request.StatusId.Value;
+        // ImageUrl không update qua đây — dùng endpoint POST /{fieldId}/image
 
         var newBase = request.BasePrice ?? field.BasePrice;
         var newPeak = request.PeakPrice ?? field.PeakPrice;
@@ -93,6 +93,7 @@ public class FieldService : IFieldService
 
         await _fieldRepo.UpdateAsync(field);
 
+        // Reload navigation sau khi đổi TypeId / StatusId
         await _ctx.Entry(field).Reference(f => f.Type).LoadAsync();
         await _ctx.Entry(field).Reference(f => f.Status).LoadAsync();
 
@@ -108,6 +109,11 @@ public class FieldService : IFieldService
 
     // ── Image upload ──────────────────────────────────────────────
 
+    /// <summary>
+    /// Upload ảnh sân vào Uploads/fields/.
+    /// Lưu file mới trước, xóa ảnh cũ sau — nếu lưu file lỗi thì DB không bị đụng.
+    /// Trả về relative URL "/Uploads/fields/{guid}.ext".
+    /// </summary>
     public async Task<string> UploadImageAsync(
         int fieldId, IFormFile file, IWebHostEnvironment env)
     {
@@ -125,7 +131,7 @@ public class FieldService : IFieldService
         return newUrl;
     }
 
-    // ── Schedule & slots ─────────────────────────────────────────
+    // ── Schedule & slots ──────────────────────────────────────────
 
     public async Task<List<FieldScheduleResponse>> GetScheduleAsync(
         GetFieldScheduleRequest request)
@@ -151,7 +157,8 @@ public class FieldService : IFieldService
         if (request.StartDate > request.EndDate)
             throw new BusinessException("StartDate phải nhỏ hơn hoặc bằng EndDate.", 400);
 
-        await StoredProcedureHelper.GenerateSlotsAsync(_ctx, request.StartDate, request.EndDate);
+        await StoredProcedureHelper.GenerateSlotsAsync(
+            _ctx, request.StartDate, request.EndDate);
     }
 
     // ── Price history ─────────────────────────────────────────────
@@ -222,8 +229,8 @@ public class FieldService : IFieldService
 
         // Tự động chuyển sân sang Bảo trì nếu StartDate là hôm nay (giờ VN UTC+7)
         var todayVn = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
-        if (request.StartDate == todayVn &&
-            field.StatusId != (int)FieldStatusEnum.Maintenance)
+        if (request.StartDate == todayVn
+            && field.StatusId != (int)FieldStatusEnum.Maintenance)
         {
             field.StatusId = (int)FieldStatusEnum.Maintenance;
             await _fieldRepo.UpdateAsync(field);
