@@ -14,9 +14,9 @@ public class IncidentRepository : IIncidentRepository
     public async Task<Incident?> GetByIdAsync(int incidentId)
         => await _ctx.Incidents
             .Include(i => i.Field)
+            .Include(i => i.Status)
             .Include(i => i.ReportedByUser)
             .Include(i => i.HandledByUser)
-            .Include(i => i.Status)
             .FirstOrDefaultAsync(i => i.IncidentId == incidentId);
 
     public async Task<(List<Incident> Items, int TotalCount)> GetIncidentsAsync(
@@ -24,9 +24,9 @@ public class IncidentRepository : IIncidentRepository
     {
         var query = _ctx.Incidents
             .Include(i => i.Field)
+            .Include(i => i.Status)
             .Include(i => i.ReportedByUser)
             .Include(i => i.HandledByUser)
-            .Include(i => i.Status)
             .AsQueryable();
 
         if (fieldId.HasValue)
@@ -35,7 +35,6 @@ public class IncidentRepository : IIncidentRepository
         if (statusId.HasValue)
             query = query.Where(i => i.StatusId == statusId.Value);
 
-        // Mới nhất trước — staff cần xử lý theo thứ tự thời gian
         query = query.OrderByDescending(i => i.CreatedAt);
 
         var totalCount = await query.CountAsync();
@@ -52,10 +51,10 @@ public class IncidentRepository : IIncidentRepository
         await _ctx.Incidents.AddAsync(incident);
         await _ctx.SaveChangesAsync();
 
-        // Reload navigations để mapper dùng được ngay sau khi tạo
+        // Reload navigations để mapper dùng ngay
         await _ctx.Entry(incident).Reference(i => i.Field).LoadAsync();
-        await _ctx.Entry(incident).Reference(i => i.ReportedByUser).LoadAsync();
         await _ctx.Entry(incident).Reference(i => i.Status).LoadAsync();
+        await _ctx.Entry(incident).Reference(i => i.ReportedByUser).LoadAsync();
 
         return incident;
     }

@@ -13,14 +13,14 @@ namespace KLCN_API.Services;
 public class IncidentService : IIncidentService
 {
     private readonly IIncidentRepository _incidentRepo;
-    private readonly IFieldRepository    _fieldRepo;
+    private readonly IWebHostEnvironment _env;
 
     public IncidentService(
         IIncidentRepository incidentRepo,
-        IFieldRepository    fieldRepo)
+        IWebHostEnvironment env)
     {
         _incidentRepo = incidentRepo;
-        _fieldRepo    = fieldRepo;
+        _env = env;
     }
 
     public async Task<PagedResponse<IncidentResponse>> GetIncidentsAsync(
@@ -31,10 +31,10 @@ public class IncidentService : IIncidentService
 
         return new PagedResponse<IncidentResponse>
         {
-            Items      = items.Select(IncidentMapper.ToResponse).ToList(),
+            Items = items.Select(IncidentMapper.ToResponse).ToList(),
             TotalCount = total,
-            Page       = page,
-            PageSize   = pageSize
+            Page = page,
+            PageSize = pageSize
         };
     }
 
@@ -42,57 +42,65 @@ public class IncidentService : IIncidentService
     {
         var incident = await _incidentRepo.GetByIdAsync(incidentId)
             ?? throw new NotFoundException("Sự cố", incidentId);
-
         return IncidentMapper.ToResponse(incident);
     }
 
+    /// <summary>
+    /// Tạo báo cáo sự cố kèm ảnh (tuỳ chọn).
+    /// Thứ tự: validate → lưu file → lưu DB.
+    /// Nếu lưu DB lỗi → xóa file vừa lưu (rollback).
+    /// </summary>
     public async Task<IncidentResponse> CreateAsync(
         CreateIncidentRequest request, int reportedBy)
     {
-        // Xác nhận sân tồn tại trước khi ghi sự cố
-        var field = await _fieldRepo.GetByIdAsync(request.FieldId)
-            ?? throw new NotFoundException("Sân bóng", request.FieldId);
+        // ── 1. Lưu ảnh nếu có — sau validate, trước DB ────────────
+        string? imageUrl = null;
+        if (request.Image is not null)
+            imageUrl = await ImageUploadHelper.SaveAsync(
+                request.Image, _env.ContentRootPath, subfolder: "incidents");
 
-        if (field.IsDeleted)
-            throw new BusinessException("Sân bóng đã bị xóa, không thể báo sự cố.", 400);
-
-        var incident = new Incident
+        // ── 2. Lưu DB — rollback file nếu lỗi ─────────────────────
+        try
         {
-            FieldId          = request.FieldId,
-            ReportedByUserId = reportedBy,
-            Title            = request.Title.Trim(),
-            Description      = request.Description?.Trim(),
-            ImageUrl         = request.ImageUrl,
-            StatusId         = (int)IncidentStatusEnum.New,
-            CreatedAt        = DateTime.UtcNow
-        };
+            var incident = new Incident
+            {
+                FieldId = request.FieldId,
+                ReportedByUserId = reportedBy,
+                Title = request.Title.Trim(),
+                Description = request.Description?.Trim(),
+                ImageUrl = imageUrl,
+                StatusId = (int)IncidentStatusEnum.New,
+                CreatedAt = DateTime.UtcNow,
+            };
 
-        var created = await _incidentRepo.CreateAsync(incident);
-        return IncidentMapper.ToResponse(created);
+            var created = await _incidentRepo.CreateAsync(incident);
+            return IncidentMapper.ToResponse(created);
+        }
+        catch
+        {
+            if (imageUrl is not null)
+                ImageUploadHelper.DeleteIfExists(imageUrl, _env.ContentRootPath);
+            throw;
+        }
     }
 
+    /// <summary>
+    /// Xử lý sự cố — Staff hoặc Admin.
+    /// StatusId: 2=Đang xử lý, 3=Đã giải quyết.
+    /// </summary>
     public async Task HandleAsync(
         int incidentId, HandleIncidentRequest request, int handledBy)
     {
         var incident = await _incidentRepo.GetByIdAsync(incidentId)
             ?? throw new NotFoundException("Sự cố", incidentId);
 
-        // Không cho phép đặt lại về trạng thái Mới (1)
-        if (request.StatusId == (int)IncidentStatusEnum.New)
-            throw new BusinessException(
-                "Không thể chuyển sự cố về trạng thái 'Mới'.", 400);
+        if (incident.StatusId == (int)IncidentStatusEnum.Resolved)
+            throw new BusinessException("Sự cố này đã được giải quyết rồi.", 400);
 
-        // Không xử lý lại sự cố đã hoàn tất (chỉ cảnh báo nhẹ nếu cần)
-        if (incident.StatusId == (int)IncidentStatusEnum.Resolved &&
-            request.StatusId  == (int)IncidentStatusEnum.Resolved)
-            throw new BusinessException("Sự cố đã được đánh dấu là đã xử lý rồi.", 400);
-
-        incident.StatusId    = request.StatusId;
-        incident.HandledNote = request.HandledNote?.Trim();
-
-        // Ghi nhận người xử lý và thời điểm xử lý lần đầu hoặc cập nhật
+        incident.StatusId = request.StatusId;
         incident.HandledByUserId = handledBy;
-        incident.HandledAt       = DateTime.UtcNow;
+        incident.HandledNote = request.HandledNote?.Trim();
+        incident.HandledAt = DateTime.UtcNow;
 
         await _incidentRepo.UpdateAsync(incident);
     }

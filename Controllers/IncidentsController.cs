@@ -1,6 +1,5 @@
 using KLCN_API.Filters;
 using KLCN_API.Helpers;
-using KLCN_API.Middleware;
 using KLCN_API.Models.DTOs.Request;
 using KLCN_API.Models.DTOs.Response;
 using KLCN_API.Models.Enums;
@@ -22,7 +21,7 @@ public class IncidentsController : ControllerBase
 
     /// <summary>
     /// Lấy danh sách sự cố — Admin và Staff.
-    /// Lọc theo sân hoặc trạng thái, phân trang.
+    /// Lọc theo sân, trạng thái (1=Mới, 2=Đang xử lý, 3=Đã giải quyết).
     /// </summary>
     [HttpGet]
     [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
@@ -30,7 +29,7 @@ public class IncidentsController : ControllerBase
     public async Task<IActionResult> GetAll(
         [FromQuery] int? fieldId,
         [FromQuery] int? statusId,
-        [FromQuery] int page     = 1,
+        [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
         var result = await _incidentService.GetIncidentsAsync(
@@ -38,7 +37,7 @@ public class IncidentsController : ControllerBase
         return Ok(ApiResponse<PagedResponse<IncidentResponse>>.Ok(result));
     }
 
-    /// <summary>Lấy chi tiết một sự cố — Admin và Staff.</summary>
+    /// <summary>Lấy chi tiết sự cố — Admin và Staff.</summary>
     [HttpGet("{incidentId:int}")]
     [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
     [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), 200)]
@@ -50,26 +49,25 @@ public class IncidentsController : ControllerBase
     }
 
     /// <summary>
-    /// Báo cáo sự cố mới tại một sân — mọi user đã đăng nhập.
-    /// Thường do Staff hoặc Customer báo cáo khi phát hiện vấn đề.
+    /// Báo cáo sự cố — Staff hoặc Admin.
+    /// Gửi multipart/form-data: fieldId, title, description (tuỳ chọn), image (tuỳ chọn).
     /// </summary>
     [HttpPost]
+    [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(ApiResponse<IncidentResponse>), 201)]
     [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
-    public async Task<IActionResult> Create([FromBody] CreateIncidentRequest request)
+    public async Task<IActionResult> Create([FromForm] CreateIncidentRequest request)
     {
-        var reportedBy = User.GetUserId();
-        var result = await _incidentService.CreateAsync(request, reportedBy);
-        return CreatedAtAction(
-            nameof(GetById),
-            new { incidentId = result.IncidentId },
-            ApiResponse<IncidentResponse>.Ok(result, "Báo cáo sự cố thành công."));
+        var result = await _incidentService.CreateAsync(request, User.GetUserId());
+        return StatusCode(201, ApiResponse<IncidentResponse>.Ok(
+            result, "Báo cáo sự cố thành công."));
     }
 
     /// <summary>
-    /// Cập nhật trạng thái xử lý sự cố — Admin và Staff.
-    /// StatusId: 2 = Đang xử lý, 3 = Đã xử lý.
+    /// Cập nhật trạng thái xử lý sự cố — Staff hoặc Admin.
+    /// StatusId: 2=Đang xử lý, 3=Đã giải quyết.
     /// </summary>
     [HttpPatch("{incidentId:int}/handle")]
     [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
@@ -79,8 +77,7 @@ public class IncidentsController : ControllerBase
     public async Task<IActionResult> Handle(
         int incidentId, [FromBody] HandleIncidentRequest request)
     {
-        var handledBy = User.GetUserId();
-        await _incidentService.HandleAsync(incidentId, request, handledBy);
-        return Ok(ApiResponse.Ok("Cập nhật xử lý sự cố thành công."));
+        await _incidentService.HandleAsync(incidentId, request, User.GetUserId());
+        return Ok(ApiResponse.Ok("Cập nhật sự cố thành công."));
     }
 }
