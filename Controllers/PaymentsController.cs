@@ -33,7 +33,7 @@ public class PaymentsController : ControllerBase
 
     /// <summary>
     /// Tạo URL thanh toán VNPay.
-    /// Booking phải ở StatusId=5 (chờ cọc) hoặc StatusId=2 (confirmed, chờ thanh toán full).
+    /// Booking phải ở StatusId=5 (chờ cọc) hoặc StatusId=2 (chờ thanh toán full).
     /// </summary>
     [HttpPost("vnpay/create/{bookingId:int}")]
     [Authorize]
@@ -75,7 +75,7 @@ public class PaymentsController : ControllerBase
         if (!decimal.TryParse(Request.Query["vnp_Amount"].ToString(), out var rawAmount))
             return Ok(new { RspCode = "01", Message = "Invalid amount" });
 
-        var amount = rawAmount / 100; // VNPay gửi VNĐ * 100
+        var amount = rawAmount / 100;
         var txnCode = Request.Query["vnp_TransactionNo"].ToString();
 
         await _paymentService.RecordOnlinePaymentAsync(
@@ -85,19 +85,37 @@ public class PaymentsController : ControllerBase
     }
 
     /// <summary>
-    /// Return — VNPay redirect trình duyệt / deep link về sau khi thanh toán.
-    /// KHÔNG cập nhật DB — chỉ redirect sang frontend/app để hiển thị kết quả.
+    /// Return — VNPay redirect về sau khi thanh toán.
+    /// Web  → redirect sang web frontend URL.
+    /// Mobile Flutter → redirect sang deep link "sportplus://payment/result?..."
+    ///   Flutter bắt link bằng uni_links, đọc status + bookingId,
+    ///   rồi gọi GET /api/bookings/{bookingId} để lấy trạng thái mới nhất.
+    /// KHÔNG cập nhật DB ở đây — IPN đã làm rồi.
     /// </summary>
     [HttpGet("vnpay/return")]
     [AllowAnonymous]
-    public IActionResult VNPayReturn()
+    public IActionResult VNPayReturn([FromQuery] string? platform = null)
     {
         var isValid = _vnpay.ValidateSignature(Request.Query, out var txnRef, out var isSuccess);
         var bookingId = int.TryParse(txnRef.Split('_')[0], out var id) ? id : 0;
+        var isMobile = platform == "mobile"
+                        || Request.Headers.UserAgent.ToString()
+                               .Contains("Flutter", StringComparison.OrdinalIgnoreCase);
 
-        var redirectUrl = isValid && isSuccess
-            ? _frontend.BuildSuccessUrl(bookingId)
-            : _frontend.BuildFailedUrl(bookingId);
+        string redirectUrl;
+
+        if (isMobile && _frontend.HasMobileDeepLink)
+        {
+            redirectUrl = isValid && isSuccess
+                ? _frontend.BuildMobileSuccessUrl(bookingId)
+                : _frontend.BuildMobileFailedUrl(bookingId);
+        }
+        else
+        {
+            redirectUrl = isValid && isSuccess
+                ? _frontend.BuildSuccessUrl(bookingId)
+                : _frontend.BuildFailedUrl(bookingId);
+        }
 
         return Redirect(redirectUrl);
     }
@@ -106,7 +124,7 @@ public class PaymentsController : ControllerBase
 
     /// <summary>
     /// Tạo URL thanh toán MoMo.
-    /// Booking phải ở StatusId=5 (chờ cọc) hoặc StatusId=2 (confirmed, chờ thanh toán full).
+    /// Booking phải ở StatusId=5 (chờ cọc) hoặc StatusId=2 (chờ thanh toán full).
     /// </summary>
     [HttpPost("momo/create/{bookingId:int}")]
     [Authorize]
@@ -172,19 +190,39 @@ public class PaymentsController : ControllerBase
     }
 
     /// <summary>
-    /// Return — MoMo redirect trình duyệt / deep link về sau khi thanh toán.
-    /// KHÔNG cập nhật DB — chỉ redirect sang frontend/app để hiển thị kết quả.
+    /// Return — MoMo redirect về sau khi thanh toán.
+    /// Web  → redirect sang web frontend URL.
+    /// Mobile Flutter → redirect sang deep link "sportplus://payment/result?..."
+    ///   Flutter bắt link bằng uni_links, đọc status + bookingId,
+    ///   rồi gọi GET /api/bookings/{bookingId} để lấy trạng thái mới nhất.
+    /// KHÔNG cập nhật DB ở đây — IPN đã làm rồi.
     /// </summary>
     [HttpGet("momo/return")]
     [AllowAnonymous]
     public IActionResult MoMoReturn(
-        [FromQuery] string orderId, [FromQuery] int resultCode)
+        [FromQuery] string orderId,
+        [FromQuery] int resultCode,
+        [FromQuery] string? platform = null)
     {
         var bookingId = MoMoHelper.ParseBookingId(orderId);
+        var isMobile = platform == "mobile"
+                        || Request.Headers.UserAgent.ToString()
+                               .Contains("Flutter", StringComparison.OrdinalIgnoreCase);
 
-        var redirectUrl = resultCode == 0
-            ? _frontend.BuildSuccessUrl(bookingId)
-            : _frontend.BuildFailedUrl(bookingId);
+        string redirectUrl;
+
+        if (isMobile && _frontend.HasMobileDeepLink)
+        {
+            redirectUrl = resultCode == 0
+                ? _frontend.BuildMobileSuccessUrl(bookingId)
+                : _frontend.BuildMobileFailedUrl(bookingId);
+        }
+        else
+        {
+            redirectUrl = resultCode == 0
+                ? _frontend.BuildSuccessUrl(bookingId)
+                : _frontend.BuildFailedUrl(bookingId);
+        }
 
         return Redirect(redirectUrl);
     }

@@ -19,8 +19,6 @@ public class ReviewRepository : IReviewRepository
 
     public async Task<Review?> GetByBookingAsync(int bookingId)
         => await _ctx.Reviews
-            .Include(r => r.User).ThenInclude(u => u.Profile)
-            .Include(r => r.Field)
             .FirstOrDefaultAsync(r => r.BookingId == bookingId);
 
     public async Task<(List<Review> Items, int TotalCount)> GetReviewsAsync(
@@ -40,7 +38,6 @@ public class ReviewRepository : IReviewRepository
         if (isVisible.HasValue)
             query = query.Where(r => r.IsVisible == isVisible.Value);
 
-        // Mới nhất trước
         query = query.OrderByDescending(r => r.CreatedAt);
 
         var totalCount = await query.CountAsync();
@@ -57,7 +54,7 @@ public class ReviewRepository : IReviewRepository
         await _ctx.Reviews.AddAsync(review);
         await _ctx.SaveChangesAsync();
 
-        // Reload navigations để mapper dùng ngay sau khi tạo
+        // Reload navigations để mapper dùng ngay
         await _ctx.Entry(review).Reference(r => r.User).LoadAsync();
         await _ctx.Entry(review).Reference(r => r.Field).LoadAsync();
         if (review.User is not null)
@@ -73,10 +70,6 @@ public class ReviewRepository : IReviewRepository
                 .SetProperty(r => r.IsVisible, isVisible)
                 .SetProperty(r => r.UpdatedAt, DateTime.UtcNow));
 
-    /// <summary>
-    /// Query vw_FieldRatings cho một sân cụ thể.
-    /// Trả null nếu sân không tồn tại (hoặc bị soft-delete trong view).
-    /// </summary>
     public async Task<FieldRatingRaw?> GetFieldRatingRawAsync(int fieldId)
         => await _ctx.Database
             .SqlQueryRaw<FieldRatingRaw>(

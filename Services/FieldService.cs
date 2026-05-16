@@ -15,11 +15,16 @@ public class FieldService : IFieldService
 {
     private readonly IFieldRepository _fieldRepo;
     private readonly SportPlusDbContext _ctx;
+    private readonly IWebHostEnvironment _env;
 
-    public FieldService(IFieldRepository fieldRepo, SportPlusDbContext ctx)
+    public FieldService(
+        IFieldRepository fieldRepo,
+        SportPlusDbContext ctx,
+        IWebHostEnvironment env)
     {
         _fieldRepo = fieldRepo;
         _ctx = ctx;
+        _env = env;
     }
 
     // ── CRUD ──────────────────────────────────────────────────────
@@ -102,8 +107,12 @@ public class FieldService : IFieldService
 
     public async Task DeleteAsync(int fieldId)
     {
-        _ = await _fieldRepo.GetByIdAsync(fieldId)
+        var field = await _fieldRepo.GetByIdAsync(fieldId)
             ?? throw new NotFoundException("Sân bóng", fieldId);
+
+        // Xóa file ảnh trên disk trước khi soft delete
+        ImageUploadHelper.DeleteIfExists(field.ImageUrl, _env.ContentRootPath);
+
         await _fieldRepo.SoftDeleteAsync(fieldId);
     }
 

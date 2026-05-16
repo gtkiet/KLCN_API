@@ -11,8 +11,13 @@ namespace KLCN_API.Services;
 public class ServiceService : IServiceService
 {
     private readonly IServiceRepository _serviceRepo;
+    private readonly IWebHostEnvironment _env;
 
-    public ServiceService(IServiceRepository serviceRepo) => _serviceRepo = serviceRepo;
+    public ServiceService(IServiceRepository serviceRepo, IWebHostEnvironment env)
+    {
+        _serviceRepo = serviceRepo;
+        _env = env;
+    }
 
     public async Task<List<ServiceResponse>> GetAllAsync(bool? isAvailable)
     {
@@ -60,8 +65,12 @@ public class ServiceService : IServiceService
 
     public async Task DeleteAsync(int serviceId)
     {
-        _ = await _serviceRepo.GetByIdAsync(serviceId)
+        var svc = await _serviceRepo.GetByIdAsync(serviceId)
             ?? throw new NotFoundException("Dịch vụ", serviceId);
+
+        // Xóa file ảnh trên disk trước khi soft delete
+        ImageUploadHelper.DeleteIfExists(svc.ImageUrl, _env.ContentRootPath);
+
         await _serviceRepo.SoftDeleteAsync(serviceId);
     }
 

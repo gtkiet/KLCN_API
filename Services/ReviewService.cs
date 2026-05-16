@@ -12,17 +12,18 @@ namespace KLCN_API.Services;
 
 public class ReviewService : IReviewService
 {
-    private readonly IReviewRepository  _reviewRepo;
-    // IBookingRepository được implement ở Group 5 (Bookings + Payments).
-    // Đã đăng ký cùng AddRepositories — ReviewService có thể inject ngay.
+    private readonly IReviewRepository _reviewRepo;
     private readonly IBookingRepository _bookingRepo;
+    private readonly IWebHostEnvironment _env;
 
     public ReviewService(
-        IReviewRepository  reviewRepo,
-        IBookingRepository bookingRepo)
+        IReviewRepository reviewRepo,
+        IBookingRepository bookingRepo,
+        IWebHostEnvironment env)
     {
-        _reviewRepo  = reviewRepo;
+        _reviewRepo = reviewRepo;
         _bookingRepo = bookingRepo;
+        _env = env;
     }
 
     public async Task<PagedResponse<ReviewResponse>> GetReviewsAsync(
@@ -34,82 +35,98 @@ public class ReviewService : IReviewService
 
         return new PagedResponse<ReviewResponse>
         {
-            Items      = items.Select(ReviewMapper.ToResponse).ToList(),
+            Items = items.Select(ReviewMapper.ToResponse).ToList(),
             TotalCount = total,
-            Page       = request.Page,
-            PageSize   = request.PageSize
+            Page = request.Page,
+            PageSize = request.PageSize
         };
     }
 
     public async Task<FieldRatingResponse> GetFieldRatingAsync(int fieldId)
     {
-        // Lấy dữ liệu aggregate từ view
         var raw = await _reviewRepo.GetFieldRatingRawAsync(fieldId)
             ?? throw new NotFoundException("Sân bóng", fieldId);
 
-        // Lấy danh sách review hiển thị của sân (không phân trang để embed vào response)
         var (reviews, _) = await _reviewRepo.GetReviewsAsync(
             fieldId, rating: null, isVisible: true, page: 1, pageSize: 50);
 
         return new FieldRatingResponse
         {
-            FieldId      = raw.FieldId,
-            FieldName    = raw.FieldName,
-            FieldType    = raw.FieldType,
-            AvgRating    = raw.AvgRating,
+            FieldId = raw.FieldId,
+            FieldName = raw.FieldName,
+            FieldType = raw.FieldType,
+            AvgRating = raw.AvgRating,
             TotalReviews = raw.TotalReviews,
-            Stars5       = raw.Stars5,
-            Stars4       = raw.Stars4,
-            Stars3       = raw.Stars3,
-            Stars2       = raw.Stars2,
-            Stars1       = raw.Stars1,
-            Reviews      = reviews.Select(ReviewMapper.ToResponse).ToList()
+            Stars5 = raw.Stars5,
+            Stars4 = raw.Stars4,
+            Stars3 = raw.Stars3,
+            Stars2 = raw.Stars2,
+            Stars1 = raw.Stars1,
+            Reviews = reviews.Select(ReviewMapper.ToResponse).ToList()
         };
     }
 
+    /// <summary>
+    /// Tạo review kèm ảnh (tuỳ chọn).
+    /// Thứ tự: validate → lưu file → lưu DB.
+    /// Nếu lưu DB lỗi → xóa file vừa lưu (rollback).
+    /// </summary>
     public async Task<ReviewResponse> CreateAsync(
         CreateReviewRequest request, int userId)
     {
-        // ── 1. Validate booking tồn tại và thuộc user này ───────────
+        // ── 1. Validate booking ───────────────────────────────────
         var booking = await _bookingRepo.GetWithDetailsAsync(request.BookingId)
             ?? throw new NotFoundException("Booking", request.BookingId);
 
         if (booking.UserId != userId)
             throw new ForbiddenException("Bạn không có quyền đánh giá booking này.");
 
-        // ── 2. Chỉ cho phép đánh giá booking đã hoàn thành ──────────
         if (booking.StatusId != (int)BookingStatusEnum.Completed)
             throw new BusinessException(
                 "Chỉ có thể đánh giá booking có trạng thái 'Đã hoàn thành'.", 400);
 
-        // ── 3. Kiểm tra đã review chưa (unique constraint BookingId) ─
         var existing = await _reviewRepo.GetByBookingAsync(request.BookingId);
         if (existing is not null)
             throw new ConflictException("Booking này đã được đánh giá rồi.");
 
-        // ── 4. Lấy FieldId từ BookingDetail đầu tiên ─────────────────
-        // Một booking có thể đặt nhiều slot nhưng cùng một sân.
         var fieldId = booking.BookingDetails
             .FirstOrDefault()?.FieldSlot?.FieldId
             ?? throw new BusinessException(
                 "Không tìm thấy thông tin sân trong booking.", 400);
 
-        // ── 5. Tạo review ─────────────────────────────────────────────
-        var review = new Review
-        {
-            BookingId = request.BookingId,
-            UserId    = userId,
-            FieldId   = fieldId,
-            Rating    = (byte)request.Rating,
-            Comment   = request.Comment?.Trim(),
-            ImageUrl  = request.ImageUrl,
-            IsVisible = true,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+        // ── 2. Lưu ảnh (nếu có) — sau khi validate xong ──────────
+        // Lưu file trước, nếu lỗi thì không đụng DB
+        string? imageUrl = null;
+        if (request.Image is not null)
+            imageUrl = await ImageUploadHelper.SaveAsync(
+                request.Image, _env.ContentRootPath, subfolder: "reviews");
 
-        var created = await _reviewRepo.CreateAsync(review);
-        return ReviewMapper.ToResponse(created);
+        // ── 3. Lưu DB — nếu lỗi thì rollback file ────────────────
+        try
+        {
+            var review = new Review
+            {
+                BookingId = request.BookingId,
+                UserId = userId,
+                FieldId = fieldId,
+                Rating = (byte)request.Rating,
+                Comment = request.Comment?.Trim(),
+                ImageUrl = imageUrl,
+                IsVisible = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            var created = await _reviewRepo.CreateAsync(review);
+            return ReviewMapper.ToResponse(created);
+        }
+        catch
+        {
+            // Lưu DB thất bại → xóa file vừa upload để tránh ảnh rác
+            if (imageUrl is not null)
+                ImageUploadHelper.DeleteIfExists(imageUrl, _env.ContentRootPath);
+            throw;
+        }
     }
 
     public async Task ToggleVisibilityAsync(int reviewId)
@@ -117,7 +134,6 @@ public class ReviewService : IReviewService
         var review = await _reviewRepo.GetByIdAsync(reviewId)
             ?? throw new NotFoundException("Đánh giá", reviewId);
 
-        // Đảo trạng thái hiển thị
         await _reviewRepo.UpdateVisibilityAsync(reviewId, !review.IsVisible);
     }
 }

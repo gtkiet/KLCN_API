@@ -20,9 +20,9 @@ public class ReviewsController : ControllerBase
         => _reviewService = reviewService;
 
     /// <summary>
-    /// Lấy danh sách đánh giá — public.
-    /// Lọc theo sân, số sao, trạng thái hiển thị (isVisible=null trả về tất cả
-    /// — Admin/Staff dùng để quản lý; khách thường gọi isVisible=true).
+    /// Lấy danh sách đánh giá — Public.
+    /// isVisible=true: chỉ lấy review hiển thị (dùng cho khách).
+    /// isVisible=null: lấy tất cả (Admin/Staff dùng để quản lý).
     /// </summary>
     [HttpGet]
     [AllowAnonymous]
@@ -47,36 +47,35 @@ public class ReviewsController : ControllerBase
     }
 
     /// <summary>
-    /// Tạo đánh giá cho một booking đã hoàn thành — Customer đã đăng nhập.
+    /// Tạo đánh giá cho booking đã hoàn thành — Customer.
+    /// Gửi multipart/form-data: bookingId, rating, comment (tuỳ chọn), image (tuỳ chọn).
     /// Mỗi booking chỉ được đánh giá một lần.
     /// </summary>
     [HttpPost]
     [Authorize]
+    [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(ApiResponse<ReviewResponse>), 201)]
     [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 403)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
     [ProducesResponseType(typeof(ApiResponse), 409)]
-    public async Task<IActionResult> Create([FromBody] CreateReviewRequest request)
+    public async Task<IActionResult> Create([FromForm] CreateReviewRequest request)
     {
-        var userId = User.GetUserId();
-        var result = await _reviewService.CreateAsync(request, userId);
+        var result = await _reviewService.CreateAsync(request, User.GetUserId());
         return StatusCode(201, ApiResponse<ReviewResponse>.Ok(
             result, "Đánh giá của bạn đã được ghi nhận."));
     }
 
     /// <summary>
-    /// Ẩn / hiện một đánh giá — Admin và Staff.
-    /// Dùng để kiểm duyệt nội dung không phù hợp.
+    /// Ẩn / hiện đánh giá — Admin và Staff.
     /// </summary>
     [HttpPatch("{reviewId:int}/toggle-visibility")]
-    [Authorize]
     [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
     [ProducesResponseType(typeof(ApiResponse), 200)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
     public async Task<IActionResult> ToggleVisibility(int reviewId)
     {
         await _reviewService.ToggleVisibilityAsync(reviewId);
-        return Ok(ApiResponse.Ok("Cập nhật trạng thái hiển thị đánh giá thành công."));
+        return Ok(ApiResponse.Ok("Cập nhật trạng thái hiển thị thành công."));
     }
 }

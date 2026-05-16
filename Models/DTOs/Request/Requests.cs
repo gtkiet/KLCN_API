@@ -531,9 +531,12 @@ public class HandleIncidentRequest
 public class CreateReviewRequest
 {
     [Required] public int BookingId { get; set; }
+
     [Required][Range(1, 5)] public int Rating { get; set; }
+
     [MaxLength(1000)] public string? Comment { get; set; }
-    [MaxLength(500)] public string? ImageUrl { get; set; }
+
+    public IFormFile? Image { get; set; }
 }
 
 public class GetReviewsRequest
