@@ -175,19 +175,18 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Đăng ký VNPay + MoMo helpers.
+    /// Đăng ký VNPay helper.
     /// Gọi trong Program.cs: builder.Services.AddPaymentGateways(builder.Configuration);
     /// </summary>
     public static IServiceCollection AddPaymentGateways(
         this IServiceCollection services, IConfiguration config)
     {
-        // VNPay
         var vnpaySettings = config.GetSection("VNPaySettings").Get<VNPaySettings>()
             ?? throw new InvalidOperationException("Thieu VNPaySettings trong appsettings.");
         services.AddSingleton(vnpaySettings);
         services.AddSingleton<VNPayHelper>();
 
-        // MoMo — MoMoHelper dùng IHttpClientFactory để gọi API MoMo
+        // MoMo — tạm giữ lại, chờ fix token
         var momoSettings = config.GetSection("MoMoSettings").Get<MoMoSettings>()
             ?? throw new InvalidOperationException("Thieu MoMoSettings trong appsettings.");
         services.AddSingleton(momoSettings);
@@ -195,6 +194,7 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
     public static IServiceCollection AddFrontendSettings(
     this IServiceCollection services, IConfiguration config)
     {
@@ -217,16 +217,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPromotionService, PromotionService>();
         services.AddScoped<IServiceService, ServiceService>();
 
-         services.AddScoped<ISupplierService,  SupplierService>();
+        services.AddScoped<ISupplierService, SupplierService>();
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 
-        services.AddScoped<IIncidentService,  IncidentService>();
-        services.AddScoped<IReviewService,    ReviewService>();
+        services.AddScoped<IIncidentService, IncidentService>();
+        services.AddScoped<IReviewService, ReviewService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<ISystemConfigService, SystemConfigService>();
-
 
         return services;
     }
@@ -247,7 +246,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IPurchaseOrderRepository, PurchaseOrderRepository>();
 
-        services.AddScoped<IIncidentRepository,  IncidentRepository>();
+        services.AddScoped<IIncidentRepository, IncidentRepository>();
         services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IDashboardRepository, DashboardRepository>();
