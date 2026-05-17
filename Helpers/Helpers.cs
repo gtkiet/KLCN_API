@@ -445,19 +445,32 @@ public static class ImageUploadHelper
     }
 }
 
+
 // ── VNPay ─────────────────────────────────────────────────────────
 
 public class VNPayHelper
 {
     private readonly VNPaySettings _settings;
 
-    public VNPayHelper(VNPaySettings settings) => _settings = settings;
+    public VNPayHelper(VNPaySettings settings)
+    {
+        _settings = settings;
+    }
 
-    /// <summary>Tạo URL thanh toán VNPay.</summary>
+    /// <summary>
+    /// Tạo URL thanh toán VNPay.
+    /// Lưu ý:
+    /// - Ký trên dữ liệu chưa URL encode.
+    /// - Chỉ URL encode khi ghép URL cuối.
+    /// </summary>
     public string CreatePaymentUrl(
-        int bookingId, decimal amount, string orderInfo, string ipAddress)
+    int bookingId,
+    decimal amount,
+    string orderInfo,
+    string ipAddress)
     {
         var txnRef = $"{bookingId}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+        var vnTime = DateTime.UtcNow.AddHours(7);
 
         var vnpay = new SortedDictionary<string, string>
         {
@@ -472,43 +485,71 @@ public class VNPayHelper
             ["vnp_Locale"] = "vn",
             ["vnp_ReturnUrl"] = _settings.ReturnUrl,
             ["vnp_IpAddr"] = ipAddress,
-            ["vnp_CreateDate"] = DateTime.Now.ToString("yyyyMMddHHmmss"),
-            ["vnp_ExpireDate"] = DateTime.Now.AddMinutes(15).ToString("yyyyMMddHHmmss"),
+            ["vnp_CreateDate"] = vnTime.ToString("yyyyMMddHHmmss"),
+            ["vnp_ExpireDate"] = vnTime.AddMinutes(15).ToString("yyyyMMddHHmmss")
         };
 
-        var rawData = string.Join("&", vnpay.Select(kv => $"{kv.Key}={kv.Value}"));
-        var urlData = string.Join("&", vnpay.Select(kv =>
-            $"{kv.Key}={WebUtility.UrlEncode(kv.Value)}"));
-        var signature = HmacSha512(_settings.HashSecret, rawData);
+        // Encode trước
+        var encodedData = string.Join("&",
+            vnpay.Select(kv =>
+                $"{kv.Key}={WebUtility.UrlEncode(kv.Value)}"));
 
-        return $"{_settings.BaseUrl}?{urlData}&vnp_SecureHash={signature}";
+        // Ký trên dữ liệu đã encode
+        var secureHash = HmacSha512(_settings.HashSecret, encodedData);
+
+        // URL cuối cùng
+        return $"{_settings.BaseUrl}?{encodedData}&vnp_SecureHash={secureHash}";
     }
 
     /// <summary>
-    /// Xác minh chữ ký IPN/Return từ VNPay.
-    /// IQueryCollection đã decode value → dùng raw value để hash, KHÔNG encode lại.
+    /// Xác minh chữ ký từ VNPay Return/IPN.
+    /// IQueryCollection đã tự decode value, nên dùng raw value để hash,
+    /// KHÔNG encode lại.
     /// </summary>
     public bool ValidateSignature(
-        IQueryCollection query, out string txnRef, out bool isSuccess)
+        IQueryCollection query,
+        out string txnRef,
+        out bool isSuccess)
     {
         txnRef = query["vnp_TxnRef"].ToString();
-        isSuccess = query["vnp_ResponseCode"] == "00";
+
+        isSuccess =
+            query["vnp_ResponseCode"] == "00" &&
+            query["vnp_TransactionStatus"] == "00";
 
         var receivedHash = query["vnp_SecureHash"].ToString();
 
-        var data = string.Join("&", query
-            .Where(kv => kv.Key != "vnp_SecureHash" && kv.Key != "vnp_SecureHashType")
-            .OrderBy(kv => kv.Key)
-            .Select(kv => $"{kv.Key}={kv.Value}"));
+        // Encode value giống hệt CreatePaymentUrl()
+        var signData = string.Join("&",
+            query
+                .Where(kv =>
+                    kv.Key != "vnp_SecureHash" &&
+                    kv.Key != "vnp_SecureHashType")
+                .OrderBy(kv => kv.Key)
+                .Select(kv =>
+                    $"{kv.Key}={WebUtility.UrlEncode(kv.Value.ToString())}"));
 
-        var expectedHash = HmacSha512(_settings.HashSecret, data);
-        return string.Equals(expectedHash, receivedHash, StringComparison.OrdinalIgnoreCase);
+        var expectedHash = HmacSha512(_settings.HashSecret, signData);
+
+        Console.WriteLine("SIGN DATA: " + signData);
+        Console.WriteLine("EXPECTED : " + expectedHash);
+        Console.WriteLine("RECEIVED : " + receivedHash);
+
+        return string.Equals(
+            expectedHash,
+            receivedHash,
+            StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Tạo HMAC SHA512, kết quả hex chữ thường.
+    /// </summary>
     private static string HmacSha512(string key, string data)
     {
         using var hmac = new HMACSHA512(Encoding.UTF8.GetBytes(key));
-        return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(data))).ToLower();
+        var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(data));
+
+        return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 }
 
@@ -517,12 +558,12 @@ public class VNPayHelper
 public class MoMoHelper
 {
     private readonly MoMoSettings _settings;
-    private readonly IHttpClientFactory _httpFactory;
+    private readonly HttpClient _httpClient;
 
-    public MoMoHelper(MoMoSettings settings, IHttpClientFactory httpFactory)
+    public MoMoHelper(MoMoSettings settings, HttpClient httpClient)
     {
         _settings = settings;
-        _httpFactory = httpFactory;
+        _httpClient = httpClient;
     }
 
     /// <summary>
@@ -552,7 +593,7 @@ public class MoMoHelper
         {
             partnerCode = _settings.PartnerCode,
             requestId,
-            amount = amountStr,
+            amount = (long)amount,
             orderId,
             orderInfo,
             redirectUrl = _settings.ReturnUrl,
@@ -563,10 +604,10 @@ public class MoMoHelper
             signature = HmacSha256(_settings.SecretKey, rawSignature)
         };
 
-        var client = _httpFactory.CreateClient();
+        //var client = _httpFactory.CreateClient();
         var content = new StringContent(
             JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        var response = await client.PostAsync(_settings.Endpoint, content);
+        var response = await _httpClient.PostAsync(_settings.Endpoint, content);
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
