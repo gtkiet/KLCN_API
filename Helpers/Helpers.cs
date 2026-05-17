@@ -512,20 +512,28 @@ public class VNPayHelper
         out bool isSuccess)
     {
         txnRef = query["vnp_TxnRef"].ToString();
-        isSuccess = query["vnp_ResponseCode"] == "00";
+
+        isSuccess =
+            query["vnp_ResponseCode"] == "00" &&
+            query["vnp_TransactionStatus"] == "00";
 
         var receivedHash = query["vnp_SecureHash"].ToString();
 
-        // Tạo lại chuỗi ký theo thứ tự alphabet
+        // Encode value giống hệt CreatePaymentUrl()
         var signData = string.Join("&",
             query
                 .Where(kv =>
                     kv.Key != "vnp_SecureHash" &&
                     kv.Key != "vnp_SecureHashType")
                 .OrderBy(kv => kv.Key)
-                .Select(kv => $"{kv.Key}={kv.Value.ToString()}"));
+                .Select(kv =>
+                    $"{kv.Key}={WebUtility.UrlEncode(kv.Value.ToString())}"));
 
         var expectedHash = HmacSha512(_settings.HashSecret, signData);
+
+        Console.WriteLine("SIGN DATA: " + signData);
+        Console.WriteLine("EXPECTED : " + expectedHash);
+        Console.WriteLine("RECEIVED : " + receivedHash);
 
         return string.Equals(
             expectedHash,

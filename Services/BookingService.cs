@@ -116,21 +116,24 @@ public class BookingService : IBookingService
         var created = await _bookingRepo.CreateAsync(booking);
 
         // 2) Gắn dịch vụ đi kèm
-        foreach (var item in request.Services)
+        if (request.Services != null)
         {
-            var svc = await _serviceRepo.GetByIdAsync(item.ServiceId)
-                ?? throw new NotFoundException("Dịch vụ", item.ServiceId);
-
-            if (!svc.IsAvailable)
-                throw new BusinessException($"Dịch vụ '{svc.Name}' hiện không khả dụng.", 400);
-
-            await _bookingRepo.AddBookingServiceAsync(new BookingServiceEntity
+            foreach (var item in request.Services)
             {
-                BookingId = created.BookingId,
-                ServiceId = item.ServiceId,
-                Quantity = item.Quantity,
-                UnitPrice = svc.Price
-            });
+                var svc = await _serviceRepo.GetByIdAsync(item.ServiceId)
+                    ?? throw new NotFoundException("Dịch vụ", item.ServiceId);
+
+                if (!svc.IsAvailable)
+                    throw new BusinessException($"Dịch vụ '{svc.Name}' hiện không khả dụng.", 400);
+
+                await _bookingRepo.AddBookingServiceAsync(new BookingServiceEntity
+                {
+                    BookingId = created.BookingId,
+                    ServiceId = item.ServiceId,
+                    Quantity = item.Quantity,
+                    UnitPrice = svc.Price
+                });
+            }
         }
 
         // 3) Confirm booking bằng stored procedure
