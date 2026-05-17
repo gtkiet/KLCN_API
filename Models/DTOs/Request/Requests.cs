@@ -277,6 +277,31 @@ public class CreateBookingRequest
     // IsFullPayment đã bỏ — luôn tạo deposit, bắt buộc thanh toán cọc qua MoMo
 }
 
+
+public class CreateWalkInBookingRequest
+{
+    [Required(ErrorMessage = "CustomerId không được để trống.")]
+    public int CustomerId { get; set; }
+
+    [Required]
+    [MinLength(1, ErrorMessage = "Phải chọn ít nhất 1 slot.")]
+    public List<int> FieldSlotIds { get; set; } = new();
+
+    public string? PromotionCode { get; set; }
+
+    public string? Note { get; set; }
+
+    public List<BookingServiceItem> Services { get; set; } = new();
+
+    // false = tạo booking chờ cọc như flow cũ
+    // true  = khách trả đủ tại quầy
+    public bool IsFullPayment { get; set; } = false;
+
+    // 1 = Trực tiếp, 2 = MoMo, 3 = VNPay
+    public int? PaymentMethodId { get; set; }
+
+    public string? TransactionCode { get; set; }
+}
 public class BookingServiceItem
 {
     [Required]

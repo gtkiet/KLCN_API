@@ -57,7 +57,32 @@ public class BookingsController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateBookingRequest request)
     {
         var result = await _bookingService.CreateBookingAsync(request, User.GetUserId());
-        return Ok(ApiResponse<BookingResponse>.Ok(result, "Đặt sân thành công. Vui lòng thanh toán cọc để xác nhận."));
+
+        return Ok(ApiResponse<BookingResponse>.Ok(
+            result,
+            "Đặt sân thành công. Vui lòng thanh toán cọc để xác nhận."));
+    }
+
+    /// <summary>
+    /// Đặt sân tại quầy — Admin/Staff đặt hộ khách.
+    /// - IsFullPayment = false: tạo booking theo flow chờ cọc như cũ
+    /// - IsFullPayment = true : khách thanh toán đủ ngay tại quầy
+    /// </summary>
+    [HttpPost("walk-in")]
+    [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
+    [ProducesResponseType(typeof(ApiResponse<BookingResponse>), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
+    [ProducesResponseType(typeof(ApiResponse), 404)]
+    [ProducesResponseType(typeof(ApiResponse), 409)]
+    public async Task<IActionResult> CreateWalkIn([FromBody] CreateWalkInBookingRequest request)
+    {
+        var result = await _bookingService.CreateWalkInBookingAsync(request, User.GetUserId());
+
+        return Ok(ApiResponse<BookingResponse>.Ok(
+            result,
+            request.IsFullPayment
+                ? "Đặt sân tại quầy và thanh toán thành công."
+                : "Đặt sân tại quầy thành công."));
     }
 
     // ── Read ──────────────────────────────────────────────────────
@@ -83,6 +108,7 @@ public class BookingsController : ControllerBase
     {
         var result = await _bookingService.GetMyBookingsAsync(
             User.GetUserId(), statusId, page, pageSize);
+
         return Ok(ApiResponse<PagedResponse<BookingSummaryResponse>>.Ok(result));
     }
 
@@ -97,7 +123,10 @@ public class BookingsController : ControllerBase
     public async Task<IActionResult> GetById(int bookingId)
     {
         var result = await _bookingService.GetByIdAsync(
-            bookingId, User.GetUserId(), User.IsAdminOrStaff());
+            bookingId,
+            User.GetUserId(),
+            User.IsAdminOrStaff());
+
         return Ok(ApiResponse<BookingResponse>.Ok(result));
     }
 
@@ -114,10 +143,15 @@ public class BookingsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), 403)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
     public async Task<IActionResult> Cancel(
-        int bookingId, [FromBody] CancelBookingRequest request)
+        int bookingId,
+        [FromBody] CancelBookingRequest request)
     {
         await _bookingService.CancelAsync(
-            bookingId, request, User.GetUserId(), User.IsAdminOrStaff());
+            bookingId,
+            request,
+            User.GetUserId(),
+            User.IsAdminOrStaff());
+
         return Ok(ApiResponse.Ok("Hủy booking thành công."));
     }
 
@@ -129,7 +163,8 @@ public class BookingsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), 403)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
     public async Task<IActionResult> Reschedule(
-        int bookingId, [FromBody] RescheduleRequest request)
+        int bookingId,
+        [FromBody] RescheduleRequest request)
     {
         await _bookingService.RescheduleAsync(bookingId, request, User.GetUserId());
         return Ok(ApiResponse.Ok("Đổi lịch thành công."));
@@ -143,7 +178,8 @@ public class BookingsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), 403)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
     public async Task<IActionResult> ApplyVoucher(
-        int bookingId, [FromBody] ApplyVoucherRequest request)
+        int bookingId,
+        [FromBody] ApplyVoucherRequest request)
     {
         await _bookingService.ApplyVoucherAsync(bookingId, request, User.GetUserId());
         return Ok(ApiResponse.Ok("Áp dụng voucher thành công."));
@@ -161,9 +197,14 @@ public class BookingsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
     public async Task<IActionResult> RecordFullPayment(
-        int bookingId, [FromBody] ConfirmPaymentRequest request)
+        int bookingId,
+        [FromBody] ConfirmPaymentRequest request)
     {
-        await _paymentService.RecordFullPaymentAsync(bookingId, request, User.GetUserId());
+        await _paymentService.RecordFullPaymentAsync(
+            bookingId,
+            request,
+            User.GetUserId());
+
         return Ok(ApiResponse.Ok("Thanh toán thành công."));
     }
 
@@ -176,7 +217,9 @@ public class BookingsController : ControllerBase
     {
         // Kiểm tra quyền truy cập trước
         await _bookingService.GetByIdAsync(
-            bookingId, User.GetUserId(), User.IsAdminOrStaff());
+            bookingId,
+            User.GetUserId(),
+            User.IsAdminOrStaff());
 
         var result = await _paymentService.GetPaymentsByBookingAsync(bookingId);
         return Ok(ApiResponse<List<PaymentResponse>>.Ok(result));
@@ -190,7 +233,9 @@ public class BookingsController : ControllerBase
     public async Task<IActionResult> GetDeposit(int bookingId)
     {
         await _bookingService.GetByIdAsync(
-            bookingId, User.GetUserId(), User.IsAdminOrStaff());
+            bookingId,
+            User.GetUserId(),
+            User.IsAdminOrStaff());
 
         var result = await _paymentService.GetDepositByBookingAsync(bookingId);
         return Ok(ApiResponse<DepositResponse?>.Ok(result));

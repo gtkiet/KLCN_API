@@ -86,6 +86,7 @@ public interface IBookingService
     Task CancelAsync(int bookingId, CancelBookingRequest request, int userId, bool isAdminOverride);
     Task RescheduleAsync(int bookingId, RescheduleRequest request, int userId);
     Task ApplyVoucherAsync(int bookingId, ApplyVoucherRequest request, int userId);
+    Task<BookingResponse> CreateWalkInBookingAsync(CreateWalkInBookingRequest request, int actorUserId);
 
 }
 
