@@ -234,4 +234,27 @@ public class PaymentsController : ControllerBase
     //
     //    return Redirect(redirectUrl);
     //}
+    [HttpGet("test-success")]
+    [AllowAnonymous]
+    public IActionResult TestSuccess([FromQuery] int bookingId)
+    {
+        return Ok(new
+        {
+            success = true,
+            message = "Thanh toán thành công",
+            bookingId = bookingId
+        });
+    }
+
+    [HttpGet("test-failed")]
+    [AllowAnonymous]
+    public IActionResult TestFailed([FromQuery] int bookingId)
+    {
+        return Ok(new
+        {
+            success = false,
+            message = "Thanh toán thất bại",
+            bookingId = bookingId
+        });
+    }
 }
