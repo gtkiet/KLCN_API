@@ -103,10 +103,26 @@ public class PaymentsController : ControllerBase
     /// </summary>
     [HttpGet("vnpay/return")]
     [AllowAnonymous]
-    public IActionResult VNPayReturn([FromQuery] string? platform = null)
+    public async Task<IActionResult> VNPayReturn([FromQuery] string? platform = null)
     {
         var isValid = _vnpay.ValidateSignature(Request.Query, out var txnRef, out var isSuccess);
         var bookingId = int.TryParse(txnRef.Split('_')[0], out var id) ? id : 0;
+
+        // FALLBACK: nếu sandbox không gọi IPN thì cập nhật ở đây
+        if (isValid && isSuccess && bookingId > 0)
+        {
+            if (decimal.TryParse(Request.Query["vnp_Amount"], out var rawAmount))
+            {
+                var amount = rawAmount / 100m;
+                var txnCode = Request.Query["vnp_TransactionNo"].ToString();
+
+                await _paymentService.RecordOnlinePaymentAsync(
+                    bookingId,
+                    amount,
+                    methodId: 3,
+                    txnCode);
+            }
+        }
 
         var isMobile = platform == "mobile"
                     || Request.Headers.UserAgent.ToString()
@@ -129,6 +145,34 @@ public class PaymentsController : ControllerBase
 
         return Redirect(redirectUrl);
     }
+    //[HttpGet("vnpay/return")]
+    //[AllowAnonymous]
+    //public IActionResult VNPayReturn([FromQuery] string? platform = null)
+    //{
+    //    var isValid = _vnpay.ValidateSignature(Request.Query, out var txnRef, out var isSuccess);
+    //    var bookingId = int.TryParse(txnRef.Split('_')[0], out var id) ? id : 0;
+
+    //    var isMobile = platform == "mobile"
+    //                || Request.Headers.UserAgent.ToString()
+    //                       .Contains("Flutter", StringComparison.OrdinalIgnoreCase);
+
+    //    string redirectUrl;
+
+    //    if (isMobile && _frontend.HasMobileDeepLink)
+    //    {
+    //        redirectUrl = isValid && isSuccess
+    //            ? _frontend.BuildMobileSuccessUrl(bookingId)
+    //            : _frontend.BuildMobileFailedUrl(bookingId);
+    //    }
+    //    else
+    //    {
+    //        redirectUrl = isValid && isSuccess
+    //            ? _frontend.BuildSuccessUrl(bookingId)
+    //            : _frontend.BuildFailedUrl(bookingId);
+    //    }
+
+    //    return Redirect(redirectUrl);
+    //}
 
     // ── MoMo (tạm disabled — chờ fix token) ──────────────────────
 
