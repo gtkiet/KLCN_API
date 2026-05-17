@@ -192,7 +192,7 @@ public class BookingsController : ControllerBase
     /// MethodId: 1=Trực tiếp, 2=MoMo, 3=VNPay.
     /// </summary>
     [HttpPost("{bookingId:int}/payment")]
-    [AuthorizeRoles(RoleEnum.Staff, RoleEnum.Admin)]
+    //[AuthorizeRoles(RoleEnum.Staff, RoleEnum.Admin)]
     [ProducesResponseType(typeof(ApiResponse), 200)]
     [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
