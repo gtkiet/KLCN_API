@@ -68,19 +68,19 @@ public class BookingsController : ControllerBase
     /// - IsFullPayment = false: tạo booking theo flow chờ cọc như cũ
     /// - IsFullPayment = true : khách thanh toán đủ ngay tại quầy
     /// </summary>
-    [HttpPost("walk-in")]
+    [HttpPost("admin/walk-in")]
     [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
     [ProducesResponseType(typeof(ApiResponse<BookingResponse>), 200)]
     [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
     [ProducesResponseType(typeof(ApiResponse), 409)]
-    public async Task<IActionResult> CreateWalkIn([FromBody] CreateWalkInBookingRequest request)
+    public async Task<IActionResult> CreateAdminWalkIn([FromBody] CreateAdminWalkInBookingRequest request)
     {
-        var result = await _bookingService.CreateWalkInBookingAsync(request, User.GetUserId());
+        var result = await _bookingService.CreateAdminWalkInBookingAsync(request, User.GetUserId());
 
         return Ok(ApiResponse<BookingResponse>.Ok(
             result,
-            request.IsFullPayment
+            request.PaymentOption == WalkInPaymentOption.PaidInFull
                 ? "Đặt sân tại quầy và thanh toán thành công."
                 : "Đặt sân tại quầy thành công."));
     }

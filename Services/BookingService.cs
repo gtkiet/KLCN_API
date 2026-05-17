@@ -9,6 +9,8 @@ using KLCN_API.Repositories.Interfaces;
 using KLCN_API.Services.Interfaces;
 using BookingEntity = KLCN_API.Models.Entities.Booking;
 using BookingServiceEntity = KLCN_API.Models.Entities.BookingService;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace KLCN_API.Services;
 
@@ -21,13 +23,14 @@ public class BookingService : IBookingService
     public BookingService(
         IBookingRepository bookingRepo,
         IServiceRepository serviceRepo,
-        SportPlusDbContext ctx)
+        SportPlusDbContext ctx,
+        IConfiguration configuration)
     {
         _bookingRepo = bookingRepo;
         _serviceRepo = serviceRepo;
         _ctx = ctx;
+        _configuration = configuration;
     }
-
     // ── Hold slots ────────────────────────────────────────────────
 
     public async Task HoldSlotsAsync(HoldSlotsRequest request, int userId)
@@ -57,36 +60,117 @@ public class BookingService : IBookingService
     /// - IsFullPayment = false: tạo booking theo flow chờ cọc như cũ
     /// - IsFullPayment = true: trả đủ tiền ngay tại quầy
     /// </summary>
-    public async Task<BookingResponse> CreateWalkInBookingAsync(CreateWalkInBookingRequest request, int actorUserId)
+    public async Task<BookingResponse> CreateAdminWalkInBookingAsync(CreateAdminWalkInBookingRequest request, int actorUserId)
     {
-        var customer = await _ctx.Users.FindAsync(request.CustomerId)
-            ?? throw new NotFoundException("Khách hàng", request.CustomerId);
+        await ValidateWalkInSlotsAsync(request.FieldSlotIds);
 
-        if (customer.RoleId != (int)RoleEnum.Customer)
-            throw new BusinessException("Người được chọn không phải khách hàng.", 400);
+        int customerId;
 
-        if (request.FieldSlotIds == null || !request.FieldSlotIds.Any())
-            throw new BusinessException("Phải chọn ít nhất 1 slot.", 400);
+        if (request.IsGuest)
+        {
+            customerId = _configuration.GetValue<int>("WalkInBooking:GuestUserId");
 
-        if (request.IsFullPayment && !request.PaymentMethodId.HasValue)
-            throw new BusinessException("Thanh toán đủ tại quầy phải có phương thức thanh toán.", 400);
+            if (customerId <= 0)
+                throw new BusinessException("Chưa cấu hình GuestUserId cho khách vãng lai.", 400);
+        }
+        else
+        {
+            if (!request.CustomerId.HasValue)
+                throw new BusinessException("Vui lòng chọn khách hàng.", 400);
+
+            var customer = await _ctx.Users.FindAsync(request.CustomerId.Value)
+                ?? throw new NotFoundException("Khách hàng", request.CustomerId.Value);
+
+            if (customer.RoleId != (int)RoleEnum.Customer)
+                throw new BusinessException("Người được chọn không phải khách hàng.", 400);
+
+            customerId = customer.UserId;
+        }
+
+        var finalNote = request.Note?.Trim();
+
+        if (request.IsGuest)
+        {
+            var guestName = string.IsNullOrWhiteSpace(request.GuestName)
+                ? "Khách vãng lai"
+                : request.GuestName.Trim();
+
+            var guestPhone = string.IsNullOrWhiteSpace(request.GuestPhone)
+                ? ""
+                : request.GuestPhone.Trim();
+
+            var guestInfo = $"[KHÁCH VÃNG LAI] {guestName}" +
+                            $"{(string.IsNullOrWhiteSpace(guestPhone) ? "" : $" - {guestPhone}")}";
+
+            finalNote = string.IsNullOrWhiteSpace(finalNote)
+                ? guestInfo
+                : $"{guestInfo} | {finalNote}";
+        }
 
         var createRequest = new CreateBookingRequest
         {
             FieldSlotIds = request.FieldSlotIds,
             PromotionCode = request.PromotionCode,
-            Note = request.Note,
-            Services = request.Services ?? new List<BookingServiceItem>()
+            Note = finalNote,
+            Services = request.Services ?? []
         };
 
+        var isFullPayment = request.PaymentOption == WalkInPaymentOption.PaidInFull;
+
+        if (isFullPayment && !request.PaymentMethodId.HasValue)
+            throw new BusinessException("Thanh toán đủ tại quầy phải có phương thức thanh toán.", 400);
+
         return await CreateBookingInternalAsync(
-            customerId: request.CustomerId,
+            customerId: customerId,
             request: createRequest,
             actorUserId: actorUserId,
-            isFullPayment: request.IsFullPayment,
+            isFullPayment: isFullPayment,
             paymentMethodId: request.PaymentMethodId,
             transactionCode: request.TransactionCode);
     }
+
+    private async Task ValidateWalkInSlotsAsync(List<int> fieldSlotIds)
+    {
+        if (fieldSlotIds == null || !fieldSlotIds.Any())
+            throw new BusinessException("Phải chọn ít nhất 1 khung giờ.", 400);
+
+        if (fieldSlotIds.Count > 3)
+            throw new BusinessException("Chỉ được chọn tối đa 3 khung giờ liên tiếp.", 400);
+
+        var slots = await _ctx.FieldSlots
+            .Include(x => x.TimeSlot)
+            .Include(x => x.Field)
+            .Where(x => fieldSlotIds.Contains(x.FieldSlotId))
+            .ToListAsync();
+
+        if (slots.Count != fieldSlotIds.Count)
+            throw new BusinessException("Có khung giờ không tồn tại.", 400);
+
+        var distinctFieldCount = slots.Select(x => x.FieldId).Distinct().Count();
+        if (distinctFieldCount > 1)
+            throw new BusinessException("Chỉ được chọn các khung giờ trong cùng một sân.", 400);
+
+        var distinctDateCount = slots.Select(x => x.SlotDate).Distinct().Count();
+        if (distinctDateCount > 1)
+            throw new BusinessException("Chỉ được chọn các khung giờ trong cùng một ngày.", 400);
+
+        var ordered = slots
+            .OrderBy(x => x.TimeSlot.StartTime)
+            .ToList();
+
+        for (int i = 1; i < ordered.Count; i++)
+        {
+            var prev = ordered[i - 1];
+            var current = ordered[i];
+
+            if (prev.TimeSlot.EndTime != current.TimeSlot.StartTime)
+            {
+                throw new BusinessException("Các khung giờ phải liền kề nhau.", 400);
+            }
+        }
+    }
+
+    private readonly IConfiguration _configuration;
 
     // ── Shared create logic ───────────────────────────────────────
 

@@ -277,6 +277,43 @@ public class CreateBookingRequest
     // IsFullPayment đã bỏ — luôn tạo deposit, bắt buộc thanh toán cọc qua MoMo
 }
 
+public enum WalkInPaymentOption
+{
+    Unpaid = 1,
+    PaidInFull = 2
+}
+
+public class CreateAdminWalkInBookingRequest
+{
+    public int? CustomerId { get; set; }
+
+    public bool IsGuest { get; set; }
+
+    [MaxLength(100)]
+    public string? GuestName { get; set; }
+
+    [MaxLength(20)]
+    public string? GuestPhone { get; set; }
+
+    [Required]
+    [MinLength(1, ErrorMessage = "Phải chọn ít nhất 1 slot.")]
+    public List<int> FieldSlotIds { get; set; } = [];
+
+    public List<BookingServiceItem> Services { get; set; } = [];
+
+    [MaxLength(50)]
+    public string? PromotionCode { get; set; }
+
+    [MaxLength(500)]
+    public string? Note { get; set; }
+
+    public WalkInPaymentOption PaymentOption { get; set; } = WalkInPaymentOption.Unpaid;
+
+    public int? PaymentMethodId { get; set; }
+
+    [MaxLength(100)]
+    public string? TransactionCode { get; set; }
+}
 
 public class CreateWalkInBookingRequest
 {
