@@ -191,10 +191,7 @@ public static class ServiceCollectionExtensions
         var momoSettings = config.GetSection("MoMoSettings").Get<MoMoSettings>()
             ?? throw new InvalidOperationException("Thieu MoMoSettings trong appsettings.");
         services.AddSingleton(momoSettings);
-        services.AddHttpClient<MoMoHelper>(); // đăng ký typed HttpClient
-        // Nếu MoMoHelper không phải typed client mà nhận IHttpClientFactory:
-        // services.AddHttpClient();
-        // services.AddSingleton<MoMoHelper>();
+        services.AddHttpClient<MoMoHelper>();
 
         return services;
     }

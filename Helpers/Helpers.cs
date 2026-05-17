@@ -517,12 +517,12 @@ public class VNPayHelper
 public class MoMoHelper
 {
     private readonly MoMoSettings _settings;
-    private readonly IHttpClientFactory _httpFactory;
+    private readonly HttpClient _httpClient;
 
-    public MoMoHelper(MoMoSettings settings, IHttpClientFactory httpFactory)
+    public MoMoHelper(MoMoSettings settings, HttpClient httpClient)
     {
         _settings = settings;
-        _httpFactory = httpFactory;
+        _httpClient = httpClient;
     }
 
     /// <summary>
@@ -552,7 +552,7 @@ public class MoMoHelper
         {
             partnerCode = _settings.PartnerCode,
             requestId,
-            amount = amountStr,
+            amount = (long)amount,
             orderId,
             orderInfo,
             redirectUrl = _settings.ReturnUrl,
@@ -563,10 +563,10 @@ public class MoMoHelper
             signature = HmacSha256(_settings.SecretKey, rawSignature)
         };
 
-        var client = _httpFactory.CreateClient();
+        //var client = _httpFactory.CreateClient();
         var content = new StringContent(
             JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        var response = await client.PostAsync(_settings.Endpoint, content);
+        var response = await _httpClient.PostAsync(_settings.Endpoint, content);
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
