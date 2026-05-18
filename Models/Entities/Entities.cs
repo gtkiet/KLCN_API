@@ -1,3 +1,4 @@
+using KLCN_API.Models.DTOs.Response;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -505,4 +506,33 @@ public class Notification
     public DateTime CreatedAt { get; set; }
 
     [ForeignKey(nameof(UserId))] public User User { get; set; } = null!;
+}
+
+public class InvoiceListItemResponse
+{
+    public int PaymentId { get; set; }
+    public string InvoiceCode { get; set; } = string.Empty;
+    public string CustomerName { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+}
+
+public class InvoiceDetailResponse
+{
+    public int PaymentId { get; set; }
+    public string InvoiceCode { get; set; } = string.Empty;
+
+    public int BookingId { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
+    public string CustomerPhone { get; set; } = string.Empty;
+    public string CustomerEmail { get; set; } = string.Empty;
+
+    public decimal Amount { get; set; }
+    public string PaymentMethod { get; set; } = string.Empty;
+    public string PaymentStatus { get; set; } = string.Empty;
+    public string? TransactionCode { get; set; }
+    public string? Note { get; set; }
+    public DateTime? PaidAt { get; set; }
+
+    public List<BookingDetailResponse> Details { get; set; } = [];
+    public List<BookingServiceResponse> Services { get; set; } = [];
 }

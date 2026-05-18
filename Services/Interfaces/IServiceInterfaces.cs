@@ -1,5 +1,6 @@
 ﻿using KLCN_API.Models.DTOs.Request;
 using KLCN_API.Models.DTOs.Response;
+using KLCN_API.Models.Entities;
 
 namespace KLCN_API.Services.Interfaces;
 
@@ -87,6 +88,7 @@ public interface IBookingService
     Task RescheduleAsync(int bookingId, RescheduleRequest request, int userId);
     Task ApplyVoucherAsync(int bookingId, ApplyVoucherRequest request, int userId);
     Task<BookingResponse> CreateAdminWalkInBookingAsync(CreateAdminWalkInBookingRequest request, int actorUserId);
+    Task CompleteAsync(int bookingId, int userId);
 
 }
 
@@ -254,4 +256,10 @@ public interface ISpecialDayService
     Task<SpecialDayResponse> CreateAsync(CreateSpecialDayRequest request, int createdBy);
     Task<SpecialDayResponse> UpdateAsync(int specialDayId, UpdateSpecialDayRequest request);
     Task DeleteAsync(int specialDayId);
+}
+
+public interface IInvoiceService
+{
+    Task<PagedResponse<InvoiceListItemResponse>> GetInvoicesAsync(DateOnly? date, int page = 1, int pageSize = 20);
+    Task<InvoiceDetailResponse> GetInvoiceByPaymentIdAsync(int paymentId);
 }

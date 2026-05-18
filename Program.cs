@@ -2,6 +2,8 @@ using KLCN_API.Extensions;
 using KLCN_API.Filters;
 using KLCN_API.Jobs;
 using KLCN_API.Middleware;
+using KLCN_API.Services;
+using KLCN_API.Services.Interfaces;
 using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,6 +31,7 @@ builder.Services.AddFrontendSettings(builder.Configuration);
 // Background jobs thay thế SQL Agent (dùng khi host không hỗ trợ SQL Agent)
 builder.Services.AddHostedService<ReleaseExpiredSlotsJob>();
 builder.Services.AddHostedService<GenerateDailySlotsJob>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 
 // ── App ───────────────────────────────────────────────────────────
 

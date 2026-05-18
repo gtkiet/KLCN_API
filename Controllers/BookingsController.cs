@@ -240,4 +240,15 @@ public class BookingsController : ControllerBase
         var result = await _paymentService.GetDepositByBookingAsync(bookingId);
         return Ok(ApiResponse<DepositResponse?>.Ok(result));
     }
+
+    [HttpPost("{bookingId:int}/complete")]
+    [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
+    [ProducesResponseType(typeof(ApiResponse), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
+    [ProducesResponseType(typeof(ApiResponse), 404)]
+    public async Task<IActionResult> Complete(int bookingId)
+    {
+        await _bookingService.CompleteAsync(bookingId, User.GetUserId());
+        return Ok(ApiResponse.Ok("Hoàn thành booking thành công."));
+    }
 }

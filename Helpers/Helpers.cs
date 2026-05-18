@@ -257,6 +257,16 @@ public static class StoredProcedureHelper
             new SqlParameter("@IsFullPayment", isFullPayment),
             new SqlParameter("@UserId", (object?)userId ?? DBNull.Value));
 
+
+    public static Task ConfirmAdminWalkInAsync(
+    DbContext ctx, int bookingId, string fieldSlotIds,
+    bool isFullPayment = false, int? userId = null)
+    => ExecuteSpAsync(ctx, "sp_ConfirmAdminWalkIn",
+        new SqlParameter("@BookingId", bookingId),
+        new SqlParameter("@FieldSlotIds", fieldSlotIds),
+        new SqlParameter("@IsFullPayment", isFullPayment),
+        new SqlParameter("@UserId", (object?)userId ?? DBNull.Value));
+
     /// <summary>sp_CancelBooking — hủy booking và hoàn tiền theo policy.</summary>
     public static Task CancelBookingAsync(
         DbContext ctx, int bookingId,
