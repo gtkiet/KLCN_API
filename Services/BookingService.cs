@@ -292,10 +292,17 @@ public class BookingService : IBookingService
         if (booking.StatusId != (int)BookingStatusEnum.Confirmed)
             throw new BusinessException("Chỉ booking đã xác nhận mới có thể hoàn thành.", 400);
 
-        booking.StatusId = (int)BookingStatusEnum.Completed;
-        booking.UpdatedAt = DateTime.UtcNow;
+        var hasSuccessfulPayment = await _ctx.Payments
+            .AnyAsync(x => x.BookingId == bookingId && x.StatusId == 2);
 
-        await _ctx.SaveChangesAsync();
+        if (!hasSuccessfulPayment)
+            throw new BusinessException("Booking chưa được thanh toán, không thể hoàn thành.", 400);
+
+        await _ctx.Database.ExecuteSqlRawAsync(
+            "UPDATE Bookings SET StatusId = {0}, UpdatedAt = {1} WHERE BookingId = {2}",
+            (int)BookingStatusEnum.Completed,
+            DateTime.UtcNow,
+            bookingId);
     }
 
     // ── Get ───────────────────────────────────────────────────────
