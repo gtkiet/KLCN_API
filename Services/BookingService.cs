@@ -101,82 +101,95 @@ public class BookingService : IBookingService
         if (request.FieldSlotIds == null || !request.FieldSlotIds.Any())
             throw new BusinessException("Phải chọn ít nhất 1 slot.", 400);
 
-        // 1) Tạo booking header trước để lấy BookingId
-        var booking = new BookingEntity
+        // Bọc transaction để rollback toàn bộ nếu SP throw
+        // (ví dụ: slot bị đặt bởi người khác, duplicate key...)
+        await using var tx = await _ctx.Database.BeginTransactionAsync();
+        try
         {
-            UserId = customerId,
-            StatusId = isFullPayment
-                ? (int)BookingStatusEnum.Confirmed
-                : (int)BookingStatusEnum.PendingPayment,
-            Note = request.Note,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        var created = await _bookingRepo.CreateAsync(booking);
-
-        // 2) Gắn dịch vụ đi kèm
-        if (request.Services != null)
-        {
-            foreach (var item in request.Services)
+            // 1) Tạo booking header trước để lấy BookingId
+            var booking = new BookingEntity
             {
-                var svc = await _serviceRepo.GetByIdAsync(item.ServiceId)
-                    ?? throw new NotFoundException("Dịch vụ", item.ServiceId);
+                UserId = customerId,
+                // Customer online: IsFullPayment=true → bỏ qua cọc, cổng thanh toán xử lý sau
+                // Walk-in      : IsFullPayment=true → trả đủ ngay tại quầy
+                StatusId = isFullPayment
+                    ? (int)BookingStatusEnum.Confirmed
+                    : (int)BookingStatusEnum.PendingPayment,
+                Note = request.Note,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
 
-                if (!svc.IsAvailable)
-                    throw new BusinessException($"Dịch vụ '{svc.Name}' hiện không khả dụng.", 400);
+            var created = await _bookingRepo.CreateAsync(booking);
 
-                await _bookingRepo.AddBookingServiceAsync(new BookingServiceEntity
+            // 2) Gắn dịch vụ đi kèm
+            if (request.Services != null)
+            {
+                foreach (var item in request.Services)
                 {
-                    BookingId = created.BookingId,
-                    ServiceId = item.ServiceId,
-                    Quantity = item.Quantity,
-                    UnitPrice = svc.Price
-                });
+                    var svc = await _serviceRepo.GetByIdAsync(item.ServiceId)
+                        ?? throw new NotFoundException("Dịch vụ", item.ServiceId);
+
+                    if (!svc.IsAvailable)
+                        throw new BusinessException($"Dịch vụ '{svc.Name}' hiện không khả dụng.", 400);
+
+                    await _bookingRepo.AddBookingServiceAsync(new BookingServiceEntity
+                    {
+                        BookingId = created.BookingId,
+                        ServiceId = item.ServiceId,
+                        Quantity = item.Quantity,
+                        UnitPrice = svc.Price
+                    });
+                }
             }
-        }
 
-        // 3) Confirm booking bằng stored procedure
-        //    - false: flow cũ chờ cọc
-        //    - true : xác nhận và chuẩn bị thanh toán đủ tại quầy
-        var slotIds = string.Join(",", request.FieldSlotIds);
+            // 3) Confirm booking bằng stored procedure
+            //    - false: flow cũ chờ cọc
+            //    - true : xác nhận và chuẩn bị thanh toán đủ
+            var slotIds = string.Join(",", request.FieldSlotIds);
 
-        await StoredProcedureHelper.ConfirmBookingAsync(
-            _ctx,
-            bookingId: created.BookingId,
-            fieldSlotIds: slotIds,
-            isFullPayment: isFullPayment,
-            userId: actorUserId);
-
-        // 4) Áp khuyến mãi nếu có
-        if (!string.IsNullOrWhiteSpace(request.PromotionCode))
-        {
-            await StoredProcedureHelper.ApplyPromotionAsync(
+            await StoredProcedureHelper.ConfirmBookingAsync(
                 _ctx,
                 bookingId: created.BookingId,
-                code: request.PromotionCode.Trim().ToUpper(),
+                fieldSlotIds: slotIds,
+                isFullPayment: isFullPayment,
                 userId: actorUserId);
-        }
 
-        // 5) Nếu khách trả đủ tiền ngay tại quầy thì ghi nhận full payment luôn
-        if (isFullPayment)
+            // 4) Áp khuyến mãi nếu có
+            if (!string.IsNullOrWhiteSpace(request.PromotionCode))
+            {
+                await StoredProcedureHelper.ApplyPromotionAsync(
+                    _ctx,
+                    bookingId: created.BookingId,
+                    code: request.PromotionCode.Trim().ToUpper(),
+                    userId: actorUserId);
+            }
+
+            // 5) Walk-in + trả đủ tại quầy → ghi nhận payment ngay, không qua cổng
+            //    Customer online + IsFullPayment=true → KHÔNG ghi ở đây,
+            //    họ sẽ thanh toán qua VNPay sau khi tạo booking xong.
+            if (isFullPayment && paymentMethodId.HasValue)
+            {
+                var txCode = string.IsNullOrWhiteSpace(transactionCode)
+                    ? $"WALKIN-{created.BookingId}-{DateTime.UtcNow:yyyyMMddHHmmss}"
+                    : transactionCode.Trim();
+
+                await StoredProcedureHelper.RecordFullPaymentAsync(
+                    _ctx,
+                    bookingId: created.BookingId,
+                    methodId: paymentMethodId.Value,
+                    transactionCode: txCode,
+                    userId: actorUserId);
+            }
+
+            await tx.CommitAsync();
+            return await GetWithDetailsOrThrowAsync(created.BookingId);
+        }
+        catch
         {
-            if (!paymentMethodId.HasValue)
-                throw new BusinessException("Thiếu phương thức thanh toán.", 400);
-
-            var txCode = string.IsNullOrWhiteSpace(transactionCode)
-                ? $"WALKIN-{created.BookingId}-{DateTime.UtcNow:yyyyMMddHHmmss}"
-                : transactionCode.Trim();
-
-            await StoredProcedureHelper.RecordFullPaymentAsync(
-                _ctx,
-                bookingId: created.BookingId,
-                methodId: paymentMethodId.Value,
-                transactionCode: txCode,
-                userId: actorUserId);
+            await tx.RollbackAsync();
+            throw;
         }
-
-        return await GetWithDetailsOrThrowAsync(created.BookingId);
     }
 
     // ── Get ───────────────────────────────────────────────────────

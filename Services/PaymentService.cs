@@ -80,12 +80,23 @@ public class PaymentService : IPaymentService
             userId: userId);
     }
 
-    // ── Online payment router (gọi từ IPN) ───────────────────────
+    // ── Online payment router (gọi từ IPN / Return fallback) ────────
 
     /// <summary>
-    /// Router dùng cho IPN callback: tự phân loại là cọc hay thanh toán còn lại
-    /// dựa trên StatusId hiện tại của booking.
-    /// Idempotent: bỏ qua nếu booking đã thanh toán đủ.
+    /// Router dùng cho IPN callback và Return fallback:
+    /// tự phân loại là cọc hay thanh toán còn lại dựa trên StatusId hiện tại.
+    ///
+    /// Idempotent theo transactionCode: nếu cùng mã giao dịch đã được ghi nhận
+    /// thì bỏ qua — tránh duplicate khi VNPay gọi IPN nhiều lần hoặc Return
+    /// fallback chạy sau IPN.
+    ///
+    /// KHÔNG dùng (alreadyPaid >= TotalAmount) để check idempotency vì
+    /// TotalAmount có thể null → (0 >= 0) = true → bỏ qua mọi payment.
+    ///
+    /// Trạng thái sau khi xử lý:
+    ///   PendingDeposit (5) → sp_RecordDeposit     → Confirmed  (còn nợ phần còn lại)
+    ///   PendingPayment (1) → sp_RecordFullPayment → Completed  (customer full payment online)
+    ///   Confirmed      (2) → sp_RecordFullPayment → Completed  (trả nốt sau khi đã cọc)
     /// </summary>
     public async Task RecordOnlinePaymentAsync(
         int bookingId, decimal amount, int methodId, string transactionCode)
@@ -93,17 +104,26 @@ public class PaymentService : IPaymentService
         var booking = await _bookingRepo.GetByIdAsync(bookingId)
             ?? throw new NotFoundException("Booking", bookingId);
 
-        // Idempotent: VNPay/MoMo có thể gọi IPN nhiều lần
-        var alreadyPaid = await _paymentRepo.GetTotalPaidAsync(bookingId);
-        if (alreadyPaid >= (booking.TotalAmount ?? 0)) return;
+        // Idempotent: kiểm tra transactionCode đã tồn tại chưa
+        var isDuplicate = await _paymentRepo.ExistsByTransactionCodeAsync(transactionCode);
+        if (isDuplicate) return;
 
         if (booking.StatusId == (int)BookingStatusEnum.PendingDeposit)
         {
+            // Ghi nhận cọc → SP cập nhật Booking.StatusId = Confirmed
             await StoredProcedureHelper.RecordDepositAsync(
                 _ctx, bookingId, amount, methodId, transactionCode, userId: null);
         }
+        else if (booking.StatusId == (int)BookingStatusEnum.PendingPayment)
+        {
+            // Customer chọn IsFullPayment=true, thanh toán full 1 lần qua cổng
+            // → SP ghi nhận và cập nhật Booking.StatusId = Completed
+            await StoredProcedureHelper.RecordFullPaymentAsync(
+                _ctx, bookingId, methodId, transactionCode, userId: null);
+        }
         else if (booking.StatusId == (int)BookingStatusEnum.Confirmed)
         {
+            // Ghi nhận phần còn lại → SP kiểm tra tổng tiền và cập nhật StatusId = Completed
             await StoredProcedureHelper.RecordFullPaymentAsync(
                 _ctx, bookingId, methodId, transactionCode, userId: null);
         }
@@ -157,9 +177,13 @@ public class PaymentService : IPaymentService
         var booking = await _bookingRepo.GetWithDetailsAsync(bookingId)
             ?? throw new NotFoundException("Booking", bookingId);
 
-        // Chỉ cho tạo payment URL khi booking đang ở trạng thái cần thanh toán
+        // Các trạng thái được phép tạo payment URL:
+        //   PendingDeposit (5) : customer thanh toán cọc
+        //   PendingPayment (1) : customer IsFullPayment=true, thanh toán full 1 lần
+        //   Confirmed (2)      : customer tự thanh toán phần còn lại sau khi đã cọc
         if (booking.StatusId != (int)BookingStatusEnum.Confirmed
-            && booking.StatusId != (int)BookingStatusEnum.PendingDeposit)
+            && booking.StatusId != (int)BookingStatusEnum.PendingDeposit
+            && booking.StatusId != (int)BookingStatusEnum.PendingPayment)
             throw new BusinessException(
                 "Booking không ở trạng thái có thể thanh toán.", 400);
 

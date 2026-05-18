@@ -257,9 +257,16 @@ public class HoldSlotsRequest
 }
 
 /// <summary>
-/// Tạo booking. Tất cả booking đều BẮT BUỘC đặt cọc qua.
-/// Sau khi tạo thành công (StatusId=5 Chờ đặt cọc), client gọi tiếp
-/// POST /api/payments/vnpay/create/{bookingId} để lấy URL thanh toán cọc.
+/// Tạo booking online — Customer.
+///
+/// IsFullPayment = false (mặc định):
+///   Booking → StatusId=5 (PendingDeposit). Gọi POST /api/payments/vnpay/create/{id}
+///   để lấy URL thanh toán cọc. Sau khi cọc xong (StatusId=2/Confirmed),
+///   gọi thêm vnpay/create lần 2 để thanh toán phần còn lại → StatusId=4/Completed.
+///
+/// IsFullPayment = true:
+///   Bỏ qua bước cọc, booking → StatusId=1 (PendingPayment). Gọi vnpay/create
+///   để thanh toán full 1 lần → StatusId=4/Completed.
 /// </summary>
 public class CreateBookingRequest
 {
@@ -274,7 +281,7 @@ public class CreateBookingRequest
 
     [MaxLength(500)]
     public string? Note { get; set; }
-    // IsFullPayment đã bỏ — luôn tạo deposit, bắt buộc thanh toán cọc
+    public bool IsFullPayment { get; set; } = false;
 }
 
 

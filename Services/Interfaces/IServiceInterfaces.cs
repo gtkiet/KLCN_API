@@ -78,7 +78,15 @@ public interface IFieldService
 public interface IBookingService
 {
     Task HoldSlotsAsync(HoldSlotsRequest request, int userId);
+
+    /// <summary>
+    /// Customer tự tạo booking.
+    /// - IsFullPayment = false (mặc định): flow cọc → gọi vnpay/create để thanh toán cọc,
+    ///   sau đó gọi vnpay/create lần 2 khi muốn thanh toán phần còn lại.
+    /// - IsFullPayment = true: bỏ qua cọc, tạo URL thanh toán full luôn qua vnpay/create.
+    /// </summary>
     Task<BookingResponse> CreateBookingAsync(CreateBookingRequest request, int userId);
+
     Task<BookingResponse> GetByIdAsync(int bookingId, int requesterId, bool isAdminOrStaff);
     Task<PagedResponse<BookingSummaryResponse>> GetBookingsAsync(GetBookingsRequest request);
     Task<PagedResponse<BookingSummaryResponse>> GetMyBookingsAsync(
@@ -86,8 +94,13 @@ public interface IBookingService
     Task CancelAsync(int bookingId, CancelBookingRequest request, int userId, bool isAdminOverride);
     Task RescheduleAsync(int bookingId, RescheduleRequest request, int userId);
     Task ApplyVoucherAsync(int bookingId, ApplyVoucherRequest request, int userId);
-    Task<BookingResponse> CreateWalkInBookingAsync(CreateWalkInBookingRequest request, int actorUserId);
 
+    /// <summary>
+    /// Admin/Staff đặt sân hộ khách tại quầy.
+    /// - IsFullPayment = false: flow chờ cọc như cũ.
+    /// - IsFullPayment = true: khách trả đủ ngay tại quầy, không cần cổng thanh toán.
+    /// </summary>
+    Task<BookingResponse> CreateWalkInBookingAsync(CreateWalkInBookingRequest request, int actorUserId);
 }
 
 // ================================================================
@@ -104,21 +117,29 @@ public interface IPaymentService
         int bookingId, decimal amount, int methodId, string transactionCode);
 
     /// <summary>
-    /// Ghi nhận thanh toán phần còn lại — Staff/Admin.
+    /// Ghi nhận thanh toán phần còn lại — Staff/Admin tại quầy.
     /// MethodId trong request: 1=Trực tiếp, 2=MoMo, 3=VNPay.
     /// </summary>
     Task RecordFullPaymentAsync(
         int bookingId, ConfirmPaymentRequest request, int userId);
 
     /// <summary>
-    /// Router cho IPN: tự phân loại cọc hay thanh toán còn lại.
-    /// Idempotent.
+    /// Router cho IPN và Return fallback: tự phân loại cọc hay thanh toán còn lại
+    /// dựa trên StatusId hiện tại của booking.
+    /// Idempotent theo transactionCode.
     /// </summary>
     Task RecordOnlinePaymentAsync(
         int bookingId, decimal amount, int methodId, string transactionCode);
 
     Task<List<PaymentResponse>> GetPaymentsByBookingAsync(int bookingId);
     Task<DepositResponse?> GetDepositByBookingAsync(int bookingId);
+
+    /// <summary>
+    /// Lấy booking để tạo payment URL.
+    /// Cho phép 2 trạng thái:
+    ///   - PendingDeposit (StatusId=5): customer thanh toán cọc
+    ///   - Confirmed (StatusId=2)     : customer tự thanh toán phần còn lại
+    /// </summary>
     Task<BookingResponse> GetBookingForPaymentAsync(int bookingId);
 }
 

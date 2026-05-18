@@ -112,6 +112,14 @@ public interface IPaymentRepository
     Task<List<Payment>> GetByBookingAsync(int bookingId);
     Task<decimal> GetTotalPaidAsync(int bookingId);
     Task<Payment> AddAsync(Payment payment);
+
+    /// <summary>
+    /// Kiểm tra transactionCode đã tồn tại chưa.
+    /// Dùng để check idempotency trong RecordOnlinePaymentAsync —
+    /// tránh duplicate khi VNPay/MoMo gọi IPN nhiều lần hoặc
+    /// Return fallback chạy sau IPN.
+    /// </summary>
+    Task<bool> ExistsByTransactionCodeAsync(string transactionCode);
 }
 
 // ================================================================

@@ -6,6 +6,8 @@ using Microsoft.EntityFrameworkCore;
 namespace KLCN_API.Repositories;
 
 // ── PaymentRepository ─────────────────────────────────────────────
+// INTERFACE (IPaymentRepository) cần bổ sung:
+//   Task<bool> ExistsByTransactionCodeAsync(string transactionCode);
 
 public class PaymentRepository : IPaymentRepository
 {
@@ -26,6 +28,17 @@ public class PaymentRepository : IPaymentRepository
             .Where(p => p.BookingId == bookingId
                      && p.StatusId == (int)Models.Enums.PaymentStatusEnum.Paid)
             .SumAsync(p => p.Amount);
+
+    /// <summary>
+    /// Kiểm tra transactionCode đã tồn tại chưa.
+    /// Dùng để check idempotency trong RecordOnlinePaymentAsync —
+    /// tránh duplicate khi VNPay gọi IPN nhiều lần hoặc Return fallback
+    /// chạy sau IPN.
+    /// </summary>
+    public async Task<bool> ExistsByTransactionCodeAsync(string transactionCode)
+        => !string.IsNullOrEmpty(transactionCode)
+           && await _ctx.Payments
+               .AnyAsync(p => p.TransactionCode == transactionCode);
 
     public async Task<Payment> AddAsync(Payment payment)
     {

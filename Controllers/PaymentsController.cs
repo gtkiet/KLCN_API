@@ -108,10 +108,13 @@ public class PaymentsController : ControllerBase
         var isValid = _vnpay.ValidateSignature(Request.Query, out var txnRef, out var isSuccess);
         var bookingId = int.TryParse(txnRef.Split('_')[0], out var id) ? id : 0;
 
-        // FALLBACK: nếu sandbox không gọi IPN thì cập nhật ở đây
+        // FALLBACK: nếu sandbox không gọi IPN thì cập nhật ở đây.
+        // RecordOnlinePaymentAsync idempotent theo transactionCode nên an toàn
+        // dù IPN đã chạy trước đó.
         if (isValid && isSuccess && bookingId > 0)
         {
-            if (decimal.TryParse(Request.Query["vnp_Amount"], out var rawAmount))
+            // Request.Query["vnp_Amount"] là StringValues — phải .ToString() trước khi parse
+            if (decimal.TryParse(Request.Query["vnp_Amount"].ToString(), out var rawAmount))
             {
                 var amount = rawAmount / 100m;
                 var txnCode = Request.Query["vnp_TransactionNo"].ToString();

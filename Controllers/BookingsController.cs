@@ -46,8 +46,15 @@ public class BookingsController : ControllerBase
 
     /// <summary>
     /// Tạo booking từ các slot đang giữ — Customer.
-    /// Sau khi thành công (StatusId=5), gọi tiếp POST /api/payments/momo/create/{bookingId}
-    /// hoặc /api/payments/vnpay/create/{bookingId} để lấy URL thanh toán cọc.
+    ///
+    /// IsFullPayment = false (mặc định):
+    ///   Booking ở StatusId=5 (chờ cọc). Gọi POST /api/payments/vnpay/create/{id}
+    ///   để lấy URL thanh toán cọc. Sau khi cọc xong booking chuyển sang StatusId=2,
+    ///   gọi thêm vnpay/create lần 2 để thanh toán phần còn lại.
+    ///
+    /// IsFullPayment = true:
+    ///   Bỏ qua bước cọc, booking ở StatusId=2 (Confirmed) ngay.
+    ///   Gọi POST /api/payments/vnpay/create/{id} để thanh toán full 1 lần.
     /// </summary>
     [HttpPost]
     [AuthorizeRoles(RoleEnum.Customer)]
@@ -58,9 +65,11 @@ public class BookingsController : ControllerBase
     {
         var result = await _bookingService.CreateBookingAsync(request, User.GetUserId());
 
-        return Ok(ApiResponse<BookingResponse>.Ok(
-            result,
-            "Đặt sân thành công. Vui lòng thanh toán cọc để xác nhận."));
+        var msg = request.IsFullPayment
+            ? "Đặt sân thành công. Vui lòng thanh toán để xác nhận."
+            : "Đặt sân thành công. Vui lòng thanh toán cọc để xác nhận.";
+
+        return Ok(ApiResponse<BookingResponse>.Ok(result, msg));
     }
 
     /// <summary>

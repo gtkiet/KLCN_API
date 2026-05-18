@@ -35,10 +35,10 @@ public enum FieldSlotStatusEnum
 public enum BookingStatusEnum
 {
     PendingPayment = 1,  // Slot đang giữ, chưa tạo booking chính thức
-    Confirmed = 2,  // Đã nộp cọc MoMo thành công
+    Confirmed = 2,  // Đã nộp cọc thành công
     Cancelled = 3,
     Completed = 4,
-    PendingDeposit = 5   // Đã tạo booking, đang chờ khách nộp cọc qua MoMo
+    PendingDeposit = 5   // Đã tạo booking, đang chờ khách nộp cọc
 }
 
 public enum PaymentStatusEnum
