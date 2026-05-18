@@ -136,11 +136,18 @@ public interface IPaymentService
 
     /// <summary>
     /// Lấy booking để tạo payment URL.
-    /// Cho phép 2 trạng thái:
-    ///   - PendingDeposit (StatusId=5): customer thanh toán cọc
-    ///   - Confirmed (StatusId=2)     : customer tự thanh toán phần còn lại
+    /// Cho phép các trạng thái: PendingDeposit(5), PendingPayment(1), Confirmed(2).
     /// </summary>
     Task<BookingResponse> GetBookingForPaymentAsync(int bookingId);
+
+    /// <summary>
+    /// Tính số tiền cần charge cho lần thanh toán tiếp theo.
+    ///   PendingDeposit (5) → DepositAmount
+    ///   PendingPayment (1) → TotalAmount (lần đầu, chưa có payment nào)
+    ///   Confirmed      (2) → TotalAmount - TổngĐãTrả (phần còn lại)
+    /// [FIX Bug 6 &amp; 7] Tránh overcharge khi charge TotalAmount cứng ở lần thanh toán 2.
+    /// </summary>
+    Task<decimal> GetAmountDueAsync(int bookingId, BookingResponse booking);
 }
 
 // ================================================================

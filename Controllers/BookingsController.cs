@@ -48,13 +48,13 @@ public class BookingsController : ControllerBase
     /// Tạo booking từ các slot đang giữ — Customer.
     ///
     /// IsFullPayment = false (mặc định):
-    ///   Booking ở StatusId=5 (chờ cọc). Gọi POST /api/payments/vnpay/create/{id}
-    ///   để lấy URL thanh toán cọc. Sau khi cọc xong booking chuyển sang StatusId=2,
-    ///   gọi thêm vnpay/create lần 2 để thanh toán phần còn lại.
+    ///   Booking → StatusId=5 (PendingDeposit). Gọi POST /api/payments/vnpay/create/{id}
+    ///   để lấy URL thanh toán cọc. Sau khi cọc xong (StatusId=2),
+    ///   gọi thêm vnpay/create lần 2 để thanh toán phần còn lại → StatusId=4/Completed.
     ///
     /// IsFullPayment = true:
-    ///   Bỏ qua bước cọc, booking ở StatusId=2 (Confirmed) ngay.
-    ///   Gọi POST /api/payments/vnpay/create/{id} để thanh toán full 1 lần.
+    ///   Booking → StatusId=2 (Confirmed, vì sp_ConfirmBooking set status=2 khi IsFullPayment=1).
+    ///   Gọi vnpay/create để thanh toán full 1 lần → StatusId=4/Completed.
     /// </summary>
     [HttpPost]
     [AuthorizeRoles(RoleEnum.Customer)]
@@ -66,7 +66,7 @@ public class BookingsController : ControllerBase
         var result = await _bookingService.CreateBookingAsync(request, User.GetUserId());
 
         var msg = request.IsFullPayment
-            ? "Đặt sân thành công. Vui lòng thanh toán để xác nhận."
+            ? "Đặt sân thành công. Vui lòng thanh toán toàn bộ để xác nhận."
             : "Đặt sân thành công. Vui lòng thanh toán cọc để xác nhận.";
 
         return Ok(ApiResponse<BookingResponse>.Ok(result, msg));
@@ -74,8 +74,8 @@ public class BookingsController : ControllerBase
 
     /// <summary>
     /// Đặt sân tại quầy — Admin/Staff đặt hộ khách.
-    /// - IsFullPayment = false: tạo booking theo flow chờ cọc như cũ
-    /// - IsFullPayment = true : khách thanh toán đủ ngay tại quầy
+    /// IsFullPayment = false: tạo booking theo flow chờ cọc.
+    /// IsFullPayment = true : khách thanh toán đủ ngay tại quầy, không cần cổng thanh toán.
     /// </summary>
     [HttpPost("walk-in")]
     [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
@@ -132,9 +132,7 @@ public class BookingsController : ControllerBase
     public async Task<IActionResult> GetById(int bookingId)
     {
         var result = await _bookingService.GetByIdAsync(
-            bookingId,
-            User.GetUserId(),
-            User.IsAdminOrStaff());
+            bookingId, User.GetUserId(), User.IsAdminOrStaff());
 
         return Ok(ApiResponse<BookingResponse>.Ok(result));
     }
@@ -156,10 +154,8 @@ public class BookingsController : ControllerBase
         [FromBody] CancelBookingRequest request)
     {
         await _bookingService.CancelAsync(
-            bookingId,
-            request,
-            User.GetUserId(),
-            User.IsAdminOrStaff());
+            bookingId, request,
+            User.GetUserId(), User.IsAdminOrStaff());
 
         return Ok(ApiResponse.Ok("Hủy booking thành công."));
     }
@@ -198,10 +194,11 @@ public class BookingsController : ControllerBase
 
     /// <summary>
     /// Thanh toán phần còn lại sau khi đã cọc — Staff hoặc Admin.
-    /// MethodId: 1=Trực tiếp, 2=MoMo, 3=VNPay.
+    /// [FIX Bug 8] Khôi phục [AuthorizeRoles] đã bị comment out,
+    /// trước đây bất kỳ user nào cũng có thể gọi endpoint này.
     /// </summary>
     [HttpPost("{bookingId:int}/payment")]
-    //[AuthorizeRoles(RoleEnum.Staff, RoleEnum.Admin)]
+    [AuthorizeRoles(RoleEnum.Staff, RoleEnum.Admin)]
     [ProducesResponseType(typeof(ApiResponse), 200)]
     [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
@@ -210,9 +207,7 @@ public class BookingsController : ControllerBase
         [FromBody] ConfirmPaymentRequest request)
     {
         await _paymentService.RecordFullPaymentAsync(
-            bookingId,
-            request,
-            User.GetUserId());
+            bookingId, request, User.GetUserId());
 
         return Ok(ApiResponse.Ok("Thanh toán thành công."));
     }
@@ -226,9 +221,7 @@ public class BookingsController : ControllerBase
     {
         // Kiểm tra quyền truy cập trước
         await _bookingService.GetByIdAsync(
-            bookingId,
-            User.GetUserId(),
-            User.IsAdminOrStaff());
+            bookingId, User.GetUserId(), User.IsAdminOrStaff());
 
         var result = await _paymentService.GetPaymentsByBookingAsync(bookingId);
         return Ok(ApiResponse<List<PaymentResponse>>.Ok(result));
@@ -242,9 +235,7 @@ public class BookingsController : ControllerBase
     public async Task<IActionResult> GetDeposit(int bookingId)
     {
         await _bookingService.GetByIdAsync(
-            bookingId,
-            User.GetUserId(),
-            User.IsAdminOrStaff());
+            bookingId, User.GetUserId(), User.IsAdminOrStaff());
 
         var result = await _paymentService.GetDepositByBookingAsync(bookingId);
         return Ok(ApiResponse<DepositResponse?>.Ok(result));
