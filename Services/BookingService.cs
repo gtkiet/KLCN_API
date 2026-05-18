@@ -7,6 +7,7 @@ using KLCN_API.Models.DTOs.Response;
 using KLCN_API.Models.Enums;
 using KLCN_API.Repositories.Interfaces;
 using KLCN_API.Services.Interfaces;
+using Microsoft.Data.SqlClient;
 using BookingEntity = KLCN_API.Models.Entities.Booking;
 using BookingServiceEntity = KLCN_API.Models.Entities.BookingService;
 using Microsoft.EntityFrameworkCore;
@@ -38,17 +39,15 @@ public class BookingService : IBookingService
 
     // ── Create booking (customer flow) ───────────────────────────
 
-    /// <summary>
-    /// Customer tự tạo booking.
-    /// Luôn đi theo flow cũ: chờ đặt cọc / pending payment.
-    /// </summary>
     public async Task<BookingResponse> CreateBookingAsync(CreateBookingRequest request, int userId)
     {
+        // [FIX Bug 1] Trước đây hardcoded isFullPayment: false, bỏ qua request.IsFullPayment
         return await CreateBookingInternalAsync(
             customerId: userId,
             request: request,
             actorUserId: userId,
-            isFullPayment: false,
+            isWalkIn: false,
+            isFullPayment: request.IsFullPayment,
             paymentMethodId: null,
             transactionCode: null,
             isAdminWalkIn: false);
@@ -56,10 +55,12 @@ public class BookingService : IBookingService
 
     // ── Create booking at counter (walk-in) ──────────────────────
 
+    // ── Create booking at counter (walk-in) ──────────────────────
+
     /// <summary>
     /// Admin/Staff đặt sân hộ khách tại quầy.
-    /// - IsFullPayment = false: tạo booking theo flow chờ cọc như cũ
-    /// - IsFullPayment = true: trả đủ tiền ngay tại quầy
+    /// - PaymentOption = Unpaid: tạo booking tại quầy, khách có thể thanh toán sau
+    /// - PaymentOption = PaidInFull: trả đủ tiền ngay tại quầy
     /// </summary>
     public async Task<BookingResponse> CreateAdminWalkInBookingAsync(CreateAdminWalkInBookingRequest request, int actorUserId)
     {
@@ -125,6 +126,7 @@ public class BookingService : IBookingService
             customerId: customerId,
             request: createRequest,
             actorUserId: actorUserId,
+            isWalkIn: true,
             isFullPayment: isFullPayment,
             paymentMethodId: request.PaymentMethodId,
             transactionCode: request.TransactionCode,
@@ -166,9 +168,7 @@ public class BookingService : IBookingService
             var current = ordered[i];
 
             if (prev.TimeSlot.EndTime != current.TimeSlot.StartTime)
-            {
                 throw new BusinessException("Các khung giờ phải liền kề nhau.", 400);
-            }
         }
     }
 
@@ -180,6 +180,7 @@ public class BookingService : IBookingService
         int customerId,
         CreateBookingRequest request,
         int actorUserId,
+        bool isWalkIn,
         bool isFullPayment,
         int? paymentMethodId,
         string? transactionCode,
@@ -188,84 +189,99 @@ public class BookingService : IBookingService
         if (request.FieldSlotIds == null || !request.FieldSlotIds.Any())
             throw new BusinessException("Phải chọn ít nhất 1 slot.", 400);
 
-        var booking = new BookingEntity
+        await using var tx = await _ctx.Database.BeginTransactionAsync();
+
+        try
         {
-            UserId = customerId,
-            StatusId = isAdminWalkIn
-                ? (int)BookingStatusEnum.Confirmed
-                : (int)BookingStatusEnum.PendingPayment,
-            Note = request.Note,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        var created = await _bookingRepo.CreateAsync(booking);
-
-        foreach (var item in request.Services)
-        {
-            var svc = await _serviceRepo.GetByIdAsync(item.ServiceId)
-                ?? throw new NotFoundException("Dịch vụ", item.ServiceId);
-
-            if (!svc.IsAvailable)
-                throw new BusinessException($"Dịch vụ '{svc.Name}' hiện không khả dụng.", 400);
-
-            await _bookingRepo.AddBookingServiceAsync(new BookingServiceEntity
+            var booking = new BookingEntity
             {
-                BookingId = created.BookingId,
-                ServiceId = item.ServiceId,
-                Quantity = item.Quantity,
-                UnitPrice = svc.Price
-            });
+                UserId = customerId,
+                StatusId = (int)BookingStatusEnum.PendingPayment,
+                Note = request.Note,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            var created = await _bookingRepo.CreateAsync(booking);
+
+            if (request.Services != null)
+            {
+                foreach (var item in request.Services)
+                {
+                    var svc = await _serviceRepo.GetByIdAsync(item.ServiceId)
+                        ?? throw new NotFoundException("Dịch vụ", item.ServiceId);
+
+                    if (!svc.IsAvailable)
+                        throw new BusinessException($"Dịch vụ '{svc.Name}' hiện không khả dụng.", 400);
+
+                    await _bookingRepo.AddBookingServiceAsync(new BookingServiceEntity
+                    {
+                        BookingId = created.BookingId,
+                        ServiceId = item.ServiceId,
+                        Quantity = item.Quantity,
+                        UnitPrice = svc.Price
+                    });
+                }
+            }
+
+            var slotIds = string.Join(",", request.FieldSlotIds);
+
+            if (isWalkIn || isAdminWalkIn)
+            {
+                await StoredProcedureHelper.ConfirmAdminWalkInAsync(
+                    _ctx,
+                    bookingId: created.BookingId,
+                    fieldSlotIds: slotIds,
+                    isFullPayment: isFullPayment,
+                    userId: actorUserId);
+            }
+            else
+            {
+                await StoredProcedureHelper.ConfirmBookingAsync(
+                    _ctx,
+                    bookingId: created.BookingId,
+                    fieldSlotIds: slotIds,
+                    isFullPayment: isFullPayment,
+                    userId: actorUserId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.PromotionCode))
+            {
+                await StoredProcedureHelper.ApplyPromotionAsync(
+                    _ctx,
+                    bookingId: created.BookingId,
+                    code: request.PromotionCode.Trim().ToUpper(),
+                    userId: actorUserId);
+            }
+
+            if ((isWalkIn || isAdminWalkIn) && isFullPayment)
+            {
+                if (!paymentMethodId.HasValue)
+                    throw new BusinessException("Thiếu phương thức thanh toán.", 400);
+
+                var txCode = string.IsNullOrWhiteSpace(transactionCode)
+                    ? $"WALKIN-{created.BookingId}-{DateTime.UtcNow:yyyyMMddHHmmss}"
+                    : transactionCode.Trim();
+
+                await StoredProcedureHelper.RecordFullPaymentAsync(
+                    _ctx,
+                    bookingId: created.BookingId,
+                    methodId: paymentMethodId.Value,
+                    transactionCode: txCode,
+                    userId: actorUserId);
+            }
+
+            await tx.CommitAsync();
+
+            _ctx.ChangeTracker.Clear();
+
+            return await GetWithDetailsOrThrowAsync(created.BookingId);
         }
-
-        var slotIds = string.Join(",", request.FieldSlotIds);
-
-        if (isAdminWalkIn)
+        catch
         {
-            await StoredProcedureHelper.ConfirmAdminWalkInAsync(
-                _ctx,
-                bookingId: created.BookingId,
-                fieldSlotIds: slotIds,
-                isFullPayment: isFullPayment,
-                userId: actorUserId);
+            await tx.RollbackAsync();
+            throw;
         }
-        else
-        {
-            await StoredProcedureHelper.ConfirmBookingAsync(
-                _ctx,
-                bookingId: created.BookingId,
-                fieldSlotIds: slotIds,
-                isFullPayment: isFullPayment,
-                userId: actorUserId);
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.PromotionCode))
-        {
-            await StoredProcedureHelper.ApplyPromotionAsync(
-                _ctx,
-                bookingId: created.BookingId,
-                code: request.PromotionCode.Trim().ToUpper(),
-                userId: actorUserId);
-        }
-
-        if (isAdminWalkIn && isFullPayment)
-        {
-            if (!paymentMethodId.HasValue)
-                throw new BusinessException("Thiếu phương thức thanh toán.", 400);
-
-            var txCode = string.IsNullOrWhiteSpace(transactionCode)
-                ? $"WALKIN-{created.BookingId}-{DateTime.UtcNow:yyyyMMddHHmmss}"
-                : transactionCode.Trim();
-
-            await StoredProcedureHelper.RecordFullPaymentAsync(
-                _ctx,
-                bookingId: created.BookingId,
-                methodId: paymentMethodId.Value,
-                transactionCode: txCode,
-                userId: actorUserId);
-        }
-
-        return await GetWithDetailsOrThrowAsync(created.BookingId);
     }
 
     public async Task CompleteAsync(int bookingId, int userId)
@@ -296,16 +312,13 @@ public class BookingService : IBookingService
         return MapDetail(booking);
     }
 
-    public async Task<PagedResponse<BookingSummaryResponse>> GetBookingsAsync(GetBookingsRequest request)
+    public async Task<PagedResponse<BookingSummaryResponse>> GetBookingsAsync(
+        GetBookingsRequest request)
     {
         var (items, total) = await _bookingRepo.GetBookingsAsync(
-            request.UserId,
-            request.StatusId,
-            request.DateFrom,
-            request.DateTo,
-            request.FieldId,
-            request.Page,
-            request.PageSize);
+            request.UserId, request.StatusId,
+            request.DateFrom, request.DateTo,
+            request.FieldId, request.Page, request.PageSize);
 
         return new PagedResponse<BookingSummaryResponse>
         {
@@ -320,13 +333,9 @@ public class BookingService : IBookingService
         int userId, int? statusId, int page, int pageSize)
     {
         var (items, total) = await _bookingRepo.GetBookingsAsync(
-            userId,
-            statusId,
-            dateFrom: null,
-            dateTo: null,
-            fieldId: null,
-            page,
-            pageSize);
+            userId, statusId,
+            dateFrom: null, dateTo: null, fieldId: null,
+            page, pageSize);
 
         return new PagedResponse<BookingSummaryResponse>
         {
@@ -340,10 +349,8 @@ public class BookingService : IBookingService
     // ── Cancel ────────────────────────────────────────────────────
 
     public async Task CancelAsync(
-        int bookingId,
-        CancelBookingRequest request,
-        int userId,
-        bool isAdminOverride)
+        int bookingId, CancelBookingRequest request,
+        int userId, bool isAdminOverride)
     {
         var booking = await _bookingRepo.GetByIdAsync(bookingId)
             ?? throw new NotFoundException("Booking", bookingId);
@@ -352,16 +359,13 @@ public class BookingService : IBookingService
             throw new ForbiddenException("Bạn không có quyền hủy booking này.");
 
         await StoredProcedureHelper.CancelBookingAsync(
-            _ctx,
-            bookingId,
-            userId,
-            request.Reason,
-            isAdminOverride);
+            _ctx, bookingId, userId, request.Reason, isAdminOverride);
     }
 
     // ── Reschedule ────────────────────────────────────────────────
 
-    public async Task RescheduleAsync(int bookingId, RescheduleRequest request, int userId)
+    public async Task RescheduleAsync(
+        int bookingId, RescheduleRequest request, int userId)
     {
         var booking = await _bookingRepo.GetByIdAsync(bookingId)
             ?? throw new NotFoundException("Booking", bookingId);
@@ -370,15 +374,13 @@ public class BookingService : IBookingService
             throw new ForbiddenException("Bạn không có quyền đổi lịch booking này.");
 
         await StoredProcedureHelper.RescheduleBookingAsync(
-            _ctx,
-            request.BookingDetailId,
-            request.NewFieldSlotId,
-            userId);
+            _ctx, request.BookingDetailId, request.NewFieldSlotId, userId);
     }
 
     // ── Apply voucher ─────────────────────────────────────────────
 
-    public async Task ApplyVoucherAsync(int bookingId, ApplyVoucherRequest request, int userId)
+    public async Task ApplyVoucherAsync(
+        int bookingId, ApplyVoucherRequest request, int userId)
     {
         var booking = await _bookingRepo.GetByIdAsync(bookingId)
             ?? throw new NotFoundException("Booking", bookingId);
@@ -386,19 +388,19 @@ public class BookingService : IBookingService
         if (booking.UserId != userId)
             throw new ForbiddenException("Bạn không có quyền áp voucher cho booking này.");
 
+        // [FIX Bug 4] Chặn áp voucher nhiều lần
+        if (booking.PromotionId.HasValue)
+            throw new BusinessException("Booking này đã có voucher áp dụng rồi.", 409);
+
         if (booking.StatusId != (int)BookingStatusEnum.PendingPayment
             && booking.StatusId != (int)BookingStatusEnum.PendingDeposit)
         {
             throw new BusinessException(
-                "Chỉ có thể áp voucher khi booking đang chờ thanh toán hoặc chờ đặt cọc.",
-                400);
+                "Chỉ có thể áp voucher khi booking đang chờ thanh toán hoặc chờ đặt cọc.", 400);
         }
 
         await StoredProcedureHelper.ApplyPromotionAsync(
-            _ctx,
-            bookingId,
-            request.Code.Trim().ToUpper(),
-            userId);
+            _ctx, bookingId, request.Code.Trim().ToUpper(), userId);
     }
 
     // ── Private helpers ───────────────────────────────────────────
@@ -407,9 +409,22 @@ public class BookingService : IBookingService
     {
         var booking = await _bookingRepo.GetWithDetailsAsync(bookingId)
             ?? throw new NotFoundException("Booking", bookingId);
-
         return MapDetail(booking);
     }
+
+    /// <summary>
+    /// [FIX Bug 9] Walk-in dùng sp_ConfirmAdminWalkIn thay vì sp_ConfirmBooking.
+    /// sp_ConfirmAdminWalkIn chiếm slot Available (không cần hold trước),
+    /// trong khi sp_ConfirmBooking yêu cầu slot ở trạng thái Holding.
+    /// </summary>
+    private Task ConfirmAdminWalkInAsync(
+        int bookingId, string fieldSlotIds, bool isFullPayment, int userId)
+        => StoredProcedureHelper.ExecuteSpAsync(
+            _ctx, "sp_ConfirmAdminWalkIn",
+            new SqlParameter("@BookingId", bookingId),
+            new SqlParameter("@FieldSlotIds", fieldSlotIds),
+            new SqlParameter("@IsFullPayment", isFullPayment),
+            new SqlParameter("@UserId", userId));
 
     // ── Mappers ───────────────────────────────────────────────────
 
@@ -457,7 +472,8 @@ public class BookingService : IBookingService
             Status = b.Deposit.Status?.Name ?? string.Empty,
             StatusId = b.Deposit.StatusId,
             DeadlineAt = b.Deposit.DeadlineAt,
-            MinutesLeft = Math.Max(0, (int)(b.Deposit.DeadlineAt - DateTime.UtcNow).TotalMinutes),
+            MinutesLeft = Math.Max(0,
+                (int)(b.Deposit.DeadlineAt - DateTime.UtcNow).TotalMinutes),
             PaidAt = b.Deposit.PaidAt
         }
     };

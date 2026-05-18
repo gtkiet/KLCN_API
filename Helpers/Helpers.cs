@@ -469,15 +469,15 @@ public class VNPayHelper
 
     /// <summary>
     /// Tạo URL thanh toán VNPay.
-    /// Lưu ý:
-    /// - Ký trên dữ liệu chưa URL encode.
-    /// - Chỉ URL encode khi ghép URL cuối.
+    /// Quy tắc đúng:
+    /// - Ký trên dữ liệu đã URL encode.
+    /// - URL cuối cùng dùng đúng chuỗi đã ký.
     /// </summary>
     public string CreatePaymentUrl(
-    int bookingId,
-    decimal amount,
-    string orderInfo,
-    string ipAddress)
+        int bookingId,
+        decimal amount,
+        string orderInfo,
+        string ipAddress)
     {
         var txnRef = $"{bookingId}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
         var vnTime = DateTime.UtcNow.AddHours(7);
@@ -499,22 +499,21 @@ public class VNPayHelper
             ["vnp_ExpireDate"] = vnTime.AddMinutes(15).ToString("yyyyMMddHHmmss")
         };
 
-        // Encode trước
-        var encodedData = string.Join("&",
+        // Chuỗi dữ liệu đã encode (được dùng để ký)
+        var signData = string.Join("&",
             vnpay.Select(kv =>
                 $"{kv.Key}={WebUtility.UrlEncode(kv.Value)}"));
 
-        // Ký trên dữ liệu đã encode
-        var secureHash = HmacSha512(_settings.HashSecret, encodedData);
+        // Tạo chữ ký
+        var secureHash = HmacSha512(_settings.HashSecret, signData);
 
-        // URL cuối cùng
-        return $"{_settings.BaseUrl}?{encodedData}&vnp_SecureHash={secureHash}";
+        // URL thanh toán
+        return $"{_settings.BaseUrl}?{signData}&vnp_SecureHash={secureHash}";
     }
 
     /// <summary>
-    /// Xác minh chữ ký từ VNPay Return/IPN.
-    /// IQueryCollection đã tự decode value, nên dùng raw value để hash,
-    /// KHÔNG encode lại.
+    /// Xác minh chữ ký từ Return URL hoặc IPN.
+    /// QueryCollection đã decode sẵn nên phải encode lại trước khi hash.
     /// </summary>
     public bool ValidateSignature(
         IQueryCollection query,
@@ -529,21 +528,27 @@ public class VNPayHelper
 
         var receivedHash = query["vnp_SecureHash"].ToString();
 
-        // Encode value giống hệt CreatePaymentUrl()
+        // Tạo lại chuỗi dữ liệu đúng thứ tự và encode lại
         var signData = string.Join("&",
             query
                 .Where(kv =>
+                    kv.Key.StartsWith("vnp_") &&
                     kv.Key != "vnp_SecureHash" &&
                     kv.Key != "vnp_SecureHashType")
-                .OrderBy(kv => kv.Key)
+                .OrderBy(kv => kv.Key, StringComparer.Ordinal)
                 .Select(kv =>
                     $"{kv.Key}={WebUtility.UrlEncode(kv.Value.ToString())}"));
 
+        // Tính chữ ký
         var expectedHash = HmacSha512(_settings.HashSecret, signData);
 
+        // Log debug
+        Console.WriteLine("===== VNPAY SIGNATURE CHECK =====");
         Console.WriteLine("SIGN DATA: " + signData);
         Console.WriteLine("EXPECTED : " + expectedHash);
         Console.WriteLine("RECEIVED : " + receivedHash);
+        Console.WriteLine("MATCH    : " +
+            string.Equals(expectedHash, receivedHash, StringComparison.OrdinalIgnoreCase));
 
         return string.Equals(
             expectedHash,
@@ -552,16 +557,131 @@ public class VNPayHelper
     }
 
     /// <summary>
-    /// Tạo HMAC SHA512, kết quả hex chữ thường.
+    /// Xử lý IPN từ VNPay.
+    /// Chỉ gọi ValidateSignature(), không cần logic riêng.
+    /// </summary>
+    public bool ValidateIpn(
+        IQueryCollection query,
+        out string txnRef,
+        out bool isSuccess)
+    {
+        return ValidateSignature(query, out txnRef, out isSuccess);
+    }
+
+    /// <summary>
+    /// Tạo HMAC SHA512, trả về hex chữ thường.
     /// </summary>
     private static string HmacSha512(string key, string data)
     {
         using var hmac = new HMACSHA512(Encoding.UTF8.GetBytes(key));
         var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(data));
-
         return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 }
+//public class VNPayHelper
+//{
+//    private readonly VNPaySettings _settings;
+
+//    public VNPayHelper(VNPaySettings settings)
+//    {
+//        _settings = settings;
+//    }
+
+//    /// <summary>
+//    /// Tạo URL thanh toán VNPay.
+//    /// Lưu ý:
+//    /// - Ký trên dữ liệu chưa URL encode.
+//    /// - Chỉ URL encode khi ghép URL cuối.
+//    /// </summary>
+//    public string CreatePaymentUrl(
+//    int bookingId,
+//    decimal amount,
+//    string orderInfo,
+//    string ipAddress)
+//    {
+//        var txnRef = $"{bookingId}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+//        var vnTime = DateTime.UtcNow.AddHours(7);
+
+//        var vnpay = new SortedDictionary<string, string>
+//        {
+//            ["vnp_Version"] = "2.1.0",
+//            ["vnp_Command"] = "pay",
+//            ["vnp_TmnCode"] = _settings.TmnCode,
+//            ["vnp_Amount"] = ((long)(amount * 100)).ToString(),
+//            ["vnp_CurrCode"] = "VND",
+//            ["vnp_TxnRef"] = txnRef,
+//            ["vnp_OrderInfo"] = orderInfo,
+//            ["vnp_OrderType"] = "other",
+//            ["vnp_Locale"] = "vn",
+//            ["vnp_ReturnUrl"] = _settings.ReturnUrl,
+//            ["vnp_IpAddr"] = ipAddress,
+//            ["vnp_CreateDate"] = vnTime.ToString("yyyyMMddHHmmss"),
+//            ["vnp_ExpireDate"] = vnTime.AddMinutes(15).ToString("yyyyMMddHHmmss")
+//        };
+
+//        // Encode trước
+//        var encodedData = string.Join("&",
+//            vnpay.Select(kv =>
+//                $"{kv.Key}={WebUtility.UrlEncode(kv.Value)}"));
+
+//        // Ký trên dữ liệu đã encode
+//        var secureHash = HmacSha512(_settings.HashSecret, encodedData);
+
+//        // URL cuối cùng
+//        return $"{_settings.BaseUrl}?{encodedData}&vnp_SecureHash={secureHash}";
+//    }
+
+//    /// <summary>
+//    /// Xác minh chữ ký từ VNPay Return/IPN.
+//    /// IQueryCollection đã tự decode value, nên dùng raw value để hash,
+//    /// KHÔNG encode lại.
+//    /// </summary>
+//    public bool ValidateSignature(
+//        IQueryCollection query,
+//        out string txnRef,
+//        out bool isSuccess)
+//    {
+//        txnRef = query["vnp_TxnRef"].ToString();
+
+//        isSuccess =
+//            query["vnp_ResponseCode"] == "00" &&
+//            query["vnp_TransactionStatus"] == "00";
+
+//        var receivedHash = query["vnp_SecureHash"].ToString();
+
+//        // Encode value giống hệt CreatePaymentUrl()
+//        var signData = string.Join("&",
+//            query
+//                .Where(kv =>
+//                    kv.Key != "vnp_SecureHash" &&
+//                    kv.Key != "vnp_SecureHashType")
+//                .OrderBy(kv => kv.Key)
+//                .Select(kv =>
+//                    $"{kv.Key}={WebUtility.UrlEncode(kv.Value.ToString())}"));
+
+//        var expectedHash = HmacSha512(_settings.HashSecret, signData);
+
+//        Console.WriteLine("SIGN DATA: " + signData);
+//        Console.WriteLine("EXPECTED : " + expectedHash);
+//        Console.WriteLine("RECEIVED : " + receivedHash);
+
+//        return string.Equals(
+//            expectedHash,
+//            receivedHash,
+//            StringComparison.OrdinalIgnoreCase);
+//    }
+
+//    /// <summary>
+//    /// Tạo HMAC SHA512, kết quả hex chữ thường.
+//    /// </summary>
+//    private static string HmacSha512(string key, string data)
+//    {
+//        using var hmac = new HMACSHA512(Encoding.UTF8.GetBytes(key));
+//        var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(data));
+
+//        return Convert.ToHexString(hashBytes).ToLowerInvariant();
+//    }
+//}
 
 // ── MoMo ─────────────────────────────────────────────────────────
 
