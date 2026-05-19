@@ -80,8 +80,24 @@ public class SportPlusDbContext : DbContext
         modelBuilder.Entity<SystemConfig>()
             .ToTable("SystemConfig");
 
+        // FieldPriceHistory: ten bang khac convention + co trigger ghi vao bang nay
+        // -> UseSqlOutputClause(false) de EF khong dung OUTPUT clause khi INSERT/UPDATE.
         modelBuilder.Entity<FieldPriceHistory>()
-            .ToTable("FieldPriceHistory");
+            .ToTable("FieldPriceHistory", tb => tb.UseSqlOutputClause(false));
+
+        // ── Trigger-safe tables ───────────────────────────────────
+        // Cac bang co DATABASE TRIGGER se gap loi DbUpdateException khi EF Core
+        // dung lenh INSERT/UPDATE ... OUTPUT INSERTED.* (khong co INTO clause).
+        // Fix: bao EF dung SELECT rieng sau DML thay vi OUTPUT clause.
+        //
+        // Triggers trong schema:
+        //   trg_Fields_PriceHistory  -> ON Fields   AFTER UPDATE
+        //   trg_Bookings_StatusLog   -> ON Bookings  AFTER UPDATE
+        modelBuilder.Entity<Field>()
+            .ToTable("Fields", tb => tb.UseSqlOutputClause(false));
+
+        modelBuilder.Entity<Booking>()
+            .ToTable("Bookings", tb => tb.UseSqlOutputClause(false));
 
         // ── Soft delete ───────────────────────────────────────────
         // Khong dung global query filter de tranh EF warning 10622
