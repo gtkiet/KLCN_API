@@ -46,15 +46,8 @@ public class BookingsController : ControllerBase
 
     /// <summary>
     /// Tạo booking từ các slot đang giữ — Customer.
-    ///
-    /// IsFullPayment = false (mặc định):
-    ///   Booking → StatusId=5 (PendingDeposit). Gọi POST /api/payments/vnpay/create/{id}
-    ///   để lấy URL thanh toán cọc. Sau khi cọc xong (StatusId=2),
-    ///   gọi thêm vnpay/create lần 2 để thanh toán phần còn lại → StatusId=4/Completed.
-    ///
-    /// IsFullPayment = true:
-    ///   Booking → StatusId=2 (Confirmed, vì sp_ConfirmBooking set status=2 khi IsFullPayment=1).
-    ///   Gọi vnpay/create để thanh toán full 1 lần → StatusId=4/Completed.
+    /// IsFullPayment = false: flow cọc → gọi POST /api/payments/vnpay/create/{id}.
+    /// IsFullPayment = true: thanh toán full 1 lần qua vnpay/create.
     /// </summary>
     [HttpPost]
     [AuthorizeRoles(RoleEnum.Customer)]
@@ -74,8 +67,8 @@ public class BookingsController : ControllerBase
 
     /// <summary>
     /// Đặt sân tại quầy — Admin/Staff đặt hộ khách.
-    /// IsFullPayment = false: tạo booking theo flow chờ cọc.
-    /// IsFullPayment = true : khách thanh toán đủ ngay tại quầy, không cần cổng thanh toán.
+    /// PaymentOption = Unpaid: tạo booking, khách thanh toán sau.
+    /// PaymentOption = PaidInFull: khách trả đủ ngay tại quầy.
     /// </summary>
     [HttpPost("admin/walk-in")]
     [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
@@ -83,9 +76,11 @@ public class BookingsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
     [ProducesResponseType(typeof(ApiResponse), 409)]
-    public async Task<IActionResult> CreateAdminWalkIn([FromBody] CreateAdminWalkInBookingRequest request)
+    public async Task<IActionResult> CreateAdminWalkIn(
+        [FromBody] CreateAdminWalkInBookingRequest request)
     {
-        var result = await _bookingService.CreateAdminWalkInBookingAsync(request, User.GetUserId());
+        var result = await _bookingService.CreateAdminWalkInBookingAsync(
+            request, User.GetUserId());
 
         return Ok(ApiResponse<BookingResponse>.Ok(
             result,
@@ -142,7 +137,7 @@ public class BookingsController : ControllerBase
     /// <summary>
     /// Hủy booking.
     /// Customer chỉ hủy được booking của mình.
-    /// Admin/Staff có thể hủy bất kỳ booking nào (SP bỏ qua ràng buộc giờ).
+    /// Admin/Staff có thể hủy bất kỳ booking nào (bỏ qua ràng buộc giờ).
     /// </summary>
     [HttpPost("{bookingId:int}/cancel")]
     [ProducesResponseType(typeof(ApiResponse), 200)]
@@ -160,7 +155,9 @@ public class BookingsController : ControllerBase
         return Ok(ApiResponse.Ok("Hủy booking thành công."));
     }
 
-    /// <summary>Đổi lịch 1 slot trong booking — Customer (chỉ booking của mình).</summary>
+    /// <summary>
+    /// Đổi lịch 1 slot trong booking — Customer (chỉ booking của mình).
+    /// </summary>
     [HttpPost("{bookingId:int}/reschedule")]
     [AuthorizeRoles(RoleEnum.Customer)]
     [ProducesResponseType(typeof(ApiResponse), 200)]
@@ -172,6 +169,23 @@ public class BookingsController : ControllerBase
         [FromBody] RescheduleRequest request)
     {
         await _bookingService.RescheduleAsync(bookingId, request, User.GetUserId());
+        return Ok(ApiResponse.Ok("Đổi lịch thành công."));
+    }
+
+    /// <summary>
+    /// Đổi lịch 1 slot — Admin/Staff (override, không kiểm tra ownership).
+    /// Theo đề cương: admin/staff có quyền hủy/đổi lịch đặt sân bất kỳ.
+    /// </summary>
+    [HttpPost("{bookingId:int}/admin-reschedule")]
+    [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
+    [ProducesResponseType(typeof(ApiResponse), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
+    [ProducesResponseType(typeof(ApiResponse), 404)]
+    public async Task<IActionResult> AdminReschedule(
+        int bookingId,
+        [FromBody] RescheduleRequest request)
+    {
+        await _bookingService.AdminRescheduleAsync(bookingId, request, User.GetUserId());
         return Ok(ApiResponse.Ok("Đổi lịch thành công."));
     }
 
@@ -193,9 +207,12 @@ public class BookingsController : ControllerBase
     // ── Payments ──────────────────────────────────────────────────
 
     /// <summary>
-    /// Thanh toán phần còn lại sau khi đã cọc — Staff hoặc Admin.
-    /// [FIX Bug 8] Khôi phục [AuthorizeRoles] đã bị comment out,
-    /// trước đây bất kỳ user nào cũng có thể gọi endpoint này.
+    /// Ghi nhận thanh toán phần còn lại tại quầy — Staff/Admin.
+    ///
+    /// TransactionCode:
+    ///   - Nếu để trống → server tự sinh mã dạng "DIRECT-{bookingId}-{timestamp}"
+    ///   - Nếu thanh toán bằng chuyển khoản/MoMo offline → điền mã giao dịch thực tế
+    ///   - Không quan trọng với thanh toán tiền mặt trực tiếp, để trống là ổn
     /// </summary>
     [HttpPost("{bookingId:int}/payment")]
     [AuthorizeRoles(RoleEnum.Staff, RoleEnum.Admin)]
@@ -219,7 +236,6 @@ public class BookingsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), 404)]
     public async Task<IActionResult> GetPayments(int bookingId)
     {
-        // Kiểm tra quyền truy cập trước
         await _bookingService.GetByIdAsync(
             bookingId, User.GetUserId(), User.IsAdminOrStaff());
 
@@ -241,6 +257,7 @@ public class BookingsController : ControllerBase
         return Ok(ApiResponse<DepositResponse?>.Ok(result));
     }
 
+    /// <summary>Đánh dấu booking hoàn thành — Admin/Staff.</summary>
     [HttpPost("{bookingId:int}/complete")]
     [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
     [ProducesResponseType(typeof(ApiResponse), 200)]

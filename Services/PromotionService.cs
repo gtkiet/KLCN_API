@@ -19,7 +19,7 @@ public class PromotionService : IPromotionService
 
     public async Task<PagedResponse<PromotionResponse>> GetPromotionsAsync(GetPromotionRequest request)
     {
-        var (items, total) = await _promoRepo.GetPromotionsAsync(request.isActive, request.Page, request.PageSize);
+        var (items, total) = await _promoRepo.GetPromotionsAsync(request.IsActive, request.Page, request.PageSize);
         return new PagedResponse<PromotionResponse>
         {
             Items = items.Select(Map).ToList(),

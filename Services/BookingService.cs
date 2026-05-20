@@ -8,10 +8,11 @@ using KLCN_API.Models.Enums;
 using KLCN_API.Repositories.Interfaces;
 using KLCN_API.Services.Interfaces;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+
 using BookingEntity = KLCN_API.Models.Entities.Booking;
 using BookingServiceEntity = KLCN_API.Models.Entities.BookingService;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+//using Microsoft.Extensions.Configuration;
 
 namespace KLCN_API.Services;
 
@@ -52,8 +53,6 @@ public class BookingService : IBookingService
             transactionCode: null,
             isAdminWalkIn: false);
     }
-
-    // ── Create booking at counter (walk-in) ──────────────────────
 
     // ── Create booking at counter (walk-in) ──────────────────────
 
@@ -382,6 +381,26 @@ public class BookingService : IBookingService
 
         await StoredProcedureHelper.RescheduleBookingAsync(
             _ctx, request.BookingDetailId, request.NewFieldSlotId, userId);
+    }
+
+    // ── Reschedule (Admin/Staff override) ────────────────────────
+
+    /// <summary>
+    /// Đổi lịch slot — Admin/Staff, không kiểm tra ownership.
+    /// Theo đề cương: admin/staff có quyền hủy/đổi lịch đặt sân bất kỳ.
+    ///
+    /// Khác RescheduleAsync ở chỗ bỏ check booking.UserId == userId,
+    /// nên admin có thể đổi hộ bất kỳ booking nào.
+    /// </summary>
+    public async Task AdminRescheduleAsync(
+        int bookingId, RescheduleRequest request, int adminUserId)
+    {
+        // Chỉ cần kiểm tra booking tồn tại, không check ownership
+        _ = await _bookingRepo.GetByIdAsync(bookingId)
+            ?? throw new NotFoundException("Booking", bookingId);
+
+        await StoredProcedureHelper.RescheduleBookingAsync(
+            _ctx, request.BookingDetailId, request.NewFieldSlotId, adminUserId);
     }
 
     // ── Apply voucher ─────────────────────────────────────────────

@@ -60,17 +60,11 @@ public class PaymentService : IPaymentService
     /// [FIX Bug 5] Trước đây chỉ check StatusId=2, bỏ sót luồng IsFullPayment=true (StatusId=1)
     /// </summary>
     public async Task RecordFullPaymentAsync(
-        int bookingId, ConfirmPaymentRequest request, int userId)
+    int bookingId, ConfirmPaymentRequest request, int userId)
     {
         var booking = await _bookingRepo.GetByIdAsync(bookingId)
             ?? throw new NotFoundException("Booking", bookingId);
 
-        // [FIX Bug 5] sp_RecordFullPayment chỉ chấp nhận StatusId=2.
-        // Nếu booking ở PendingPayment(1) — luồng customer IsFullPayment=true
-        // nhưng admin muốn ghi nhận direct — cần booking đã được ConfirmBooking SP
-        // chạy và đặt status. Trong thực tế walk-in luồng IsFullPayment=true đã
-        // tự động trả, còn customer online chỉ trả qua cổng. Ở đây chỉ cho phép
-        // staff ghi nhận thanh toán phần còn lại khi booking đã Confirmed (2).
         if (booking.StatusId != (int)BookingStatusEnum.Confirmed
             && booking.StatusId != (int)BookingStatusEnum.PendingPayment)
         {
@@ -78,15 +72,18 @@ public class PaymentService : IPaymentService
                 "Booking phải ở trạng thái Đã xác nhận hoặc Chờ thanh toán mới có thể ghi nhận.", 400);
         }
 
-        // sp_RecordFullPayment yêu cầu StatusId=2 — nếu booking đang ở trạng thái
-        // PendingPayment(1) mà staff muốn ghi nhận, cần thay bằng sp_RecordDeposit
-        // hoặc đảm bảo ConfirmBooking đã chạy trước.
-        // Walk-in full payment đã được xử lý trong CreateBookingInternalAsync.
+        // AUTO-GENERATE transactionCode nếu staff để trống.
+        // Thanh toán tiền mặt không có mã giao dịch thực — sinh mã nội bộ
+        // để đảm bảo idempotency và truy vết sau này.
+        var txCode = string.IsNullOrWhiteSpace(request.TransactionCode)
+            ? $"DIRECT-{bookingId}-{DateTime.UtcNow:yyyyMMddHHmmss}"
+            : request.TransactionCode.Trim();
+
         await StoredProcedureHelper.RecordFullPaymentAsync(
             _ctx,
             bookingId: bookingId,
             methodId: request.MethodId,
-            transactionCode: request.TransactionCode,
+            transactionCode: txCode,
             userId: userId);
     }
 

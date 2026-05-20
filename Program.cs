@@ -7,6 +7,7 @@ using KLCN_API.Services.Interfaces;
 using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 // ── Services ──────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ builder.Services.AddFrontendSettings(builder.Configuration);
 builder.Services.AddHostedService<ReleaseExpiredSlotsJob>();
 builder.Services.AddHostedService<GenerateDailySlotsJob>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IInvoicePdfService, InvoicePdfService>();
 
 // ── App ───────────────────────────────────────────────────────────
 

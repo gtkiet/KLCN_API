@@ -35,32 +35,42 @@ public class PaymentsController : ControllerBase
     ///
     /// Tự động tính số tiền cần thanh toán theo trạng thái:
     ///   PendingDeposit (5) → charge DepositAmount (tiền cọc)
-    ///   PendingPayment (1) → charge full TotalAmount (lần duy nhất)
+    ///   PendingPayment (1) → charge full TotalAmount
     ///   Confirmed      (2) → charge TotalAmount - TổngĐãTrả (phần còn lại)
     ///
-    /// [FIX Bug 6 & 7] Trước đây luôn dùng TotalAmount, gây overcharge lần 2
-    /// sau khi đã nộp cọc và không chuyển được sang Completed.
+    /// FIX MOBILE: URL tạo ra nhúng platform=mobile vào ReturnUrl khi gọi từ app,
+    /// để VNPayReturn biết redirect về deep link thay vì web frontend.
+    /// Flutter truyền header X-Platform: mobile hoặc query ?platform=mobile.
     /// </summary>
     [HttpPost("vnpay/create/{bookingId:int}")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponse<object>), 200)]
     [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
-    public async Task<IActionResult> CreateVNPay(int bookingId)
+    public async Task<IActionResult> CreateVNPay(
+        int bookingId,
+        [FromQuery] string? platform = null)
     {
         var booking = await _paymentService.GetBookingForPaymentAsync(bookingId);
-
-        // [FIX Bug 6 & 7] Tính đúng số tiền cần charge thay vì dùng TotalAmount cứng
         var amountDue = await _paymentService.GetAmountDueAsync(bookingId, booking);
 
         var ip = HttpContext.Connection.RemoteIpAddress?.MapToIPv4().ToString()
-                      ?? "127.0.0.1";
+                 ?? "127.0.0.1";
+
+        // FIX MOBILE: Nhúng platform=mobile vào ReturnUrl để VNPayReturn
+        // redirect đúng về deep link thay vì web frontend.
+        // VNPay sandbox không thay đổi ReturnUrl nên cách này hoạt động.
+        var isMobileRequest = platform == "mobile"
+            || Request.Headers["X-Platform"].ToString()
+                      .Equals("mobile", StringComparison.OrdinalIgnoreCase);
 
         var url = _vnpay.CreatePaymentUrl(
             bookingId,
             amountDue,
             $"Thanh toan san bong SportPlus - Booking #{bookingId}",
-            ip);
+            ip,
+            // Truyền platform xuống helper để embed vào ReturnUrl query string
+            isMobileRequest ? "mobile" : null);
 
         return Ok(ApiResponse<object>.Ok(new
         {
@@ -73,8 +83,12 @@ public class PaymentsController : ControllerBase
 
     /// <summary>
     /// IPN — VNPay gọi server-to-server sau khi giao dịch hoàn tất.
-    /// Không yêu cầu JWT. Đây là nơi DUY NHẤT cập nhật DB.
-    /// RecordOnlinePaymentAsync idempotent theo transactionCode.
+    /// Không yêu cầu JWT. Đây là nơi DUY NHẤT cập nhật DB (production).
+    ///
+    /// VẤN ĐỀ SANDBOX: VNPay sandbox thường KHÔNG gọi IPN.
+    /// Return endpoint đã có fallback xử lý DB để bù — xem VNPayReturn.
+    /// Khi lên production IPN sẽ hoạt động bình thường và idempotency
+    /// đảm bảo không bị ghi đôi dù cả hai cùng chạy.
     /// </summary>
     [HttpGet("vnpay/ipn")]
     [AllowAnonymous]
@@ -96,18 +110,29 @@ public class PaymentsController : ControllerBase
         var txnCode = Request.Query["vnp_TransactionNo"].ToString();
 
         await _paymentService.RecordOnlinePaymentAsync(
-            bookingId, amount, methodId: 3 /* VNPay */, txnCode);
+            bookingId, amount, methodId: (int)PaymentMethodEnum.VNPay, txnCode);
 
         return Ok(new { RspCode = "00", Message = "Confirm Success" });
     }
 
     /// <summary>
-    /// Return — VNPay redirect trình duyệt về đây sau khi thanh toán.
-    /// KHÔNG cập nhật DB ở đây — IPN đã làm rồi.
-    /// Fallback: nếu IPN sandbox chưa gọi thì xử lý ở đây (idempotent).
+    /// Return — VNPay redirect trình duyệt về đây sau khi khách hoàn tất thanh toán.
     ///
-    /// Web    → 302 redirect sang web frontend URL.
-    /// Mobile → 302 redirect sang deep link "sportplus://payment/result?..."
+    /// SANDBOX FALLBACK: Sandbox không gọi IPN nên Return phải cập nhật DB ở đây.
+    /// RecordOnlinePaymentAsync idempotent theo transactionCode — không bị ghi đôi
+    /// khi production có cả IPN lẫn Return cùng chạy.
+    ///
+    /// FIX MOBILE: Đọc ?platform=mobile từ ReturnUrl (được nhúng lúc tạo URL).
+    /// Nếu là mobile → redirect sang deep link "sportplus://payment/result?..."
+    /// thay vì web frontend URL.
+    ///
+    /// Luồng mobile:
+    ///   Flutter → POST /vnpay/create?platform=mobile
+    ///          → nhận paymentUrl (có ReturnUrl chứa &platform=mobile)
+    ///          → mở url_launcher / webview
+    ///          → VNPay xong → GET /vnpay/return?platform=mobile&...
+    ///          → server redirect → sportplus://payment/result?status=success&bookingId=X
+    ///          → Flutter bắt deep link, đóng browser, hiển thị kết quả
     /// </summary>
     [HttpGet("vnpay/return")]
     [AllowAnonymous]
@@ -116,25 +141,28 @@ public class PaymentsController : ControllerBase
         var isValid = _vnpay.ValidateSignature(Request.Query, out var txnRef, out var isSuccess);
         var bookingId = int.TryParse(txnRef.Split('_')[0], out var id) ? id : 0;
 
-        // Fallback: đảm bảo DB được cập nhật ngay cả khi IPN chưa đến
+        // SANDBOX FALLBACK: cập nhật DB ở đây vì IPN sandbox thường không gọi
         if (isValid && isSuccess && bookingId > 0
             && decimal.TryParse(Request.Query["vnp_Amount"].ToString(), out var rawAmount))
         {
             var amount = rawAmount / 100m;
             var txnCode = Request.Query["vnp_TransactionNo"].ToString();
 
+            // idempotent — gọi nhiều lần cũng chỉ ghi 1 lần nhờ ExistsByTransactionCodeAsync
             await _paymentService.RecordOnlinePaymentAsync(
-                bookingId, amount, methodId: 3, txnCode);
+                bookingId, amount, methodId: (int)PaymentMethodEnum.VNPay, txnCode);
         }
 
+        // FIX MOBILE: platform được nhúng vào ReturnUrl khi tạo URL
         var isMobile = platform == "mobile"
                     || Request.Headers.UserAgent.ToString()
-                           .Contains("Flutter", StringComparison.OrdinalIgnoreCase);
+                              .Contains("Flutter", StringComparison.OrdinalIgnoreCase);
 
         string redirectUrl;
 
         if (isMobile && _frontend.HasMobileDeepLink)
         {
+            // → sportplus://payment/result?status=success&bookingId=88
             redirectUrl = isValid && isSuccess
                 ? _frontend.BuildMobileSuccessUrl(bookingId)
                 : _frontend.BuildMobileFailedUrl(bookingId);
