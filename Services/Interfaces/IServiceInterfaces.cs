@@ -303,3 +303,28 @@ public interface IInvoiceService
     Task<PagedResponse<InvoiceListItemResponse>> GetInvoicesAsync(DateOnly? date, int page = 1, int pageSize = 20);
     Task<InvoiceDetailResponse> GetInvoiceByPaymentIdAsync(int paymentId);
 }
+
+public interface IBackupService
+{
+    /// <summary>Export toàn bộ dữ liệu → (zipBytes, fileName).</summary>
+    Task<(byte[] ZipBytes, string FileName)> ExportAsync();
+
+    /// <summary>Tạo snapshot lưu trên server, trả về thông tin file.</summary>
+    Task<BackupSnapshotInfo> CreateSnapshotAsync();
+
+    /// <summary>Liệt kê các snapshot đang có trên server.</summary>
+    Task<List<BackupSnapshotInfo>> ListSnapshotsAsync();
+
+    /// <summary>Đọc nội dung một snapshot để download.</summary>
+    Task<byte[]> DownloadSnapshotAsync(string fileName);
+
+    /// <summary>Xóa một snapshot trên server.</summary>
+    Task DeleteSnapshotAsync(string fileName);
+
+    /// <summary>
+    /// Restore dữ liệu từ stream của file .zip backup.
+    /// Tự snapshot hiện tại trước khi restore.
+    /// Chạy trong transaction — rollback toàn bộ nếu lỗi.
+    /// </summary>
+    Task<RestoreReportResponse> RestoreAsync(Stream zipStream, int adminUserId);
+}

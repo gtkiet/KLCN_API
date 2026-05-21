@@ -1,6 +1,7 @@
-﻿using Microsoft.Data.SqlClient;
+﻿using KLCN_API.Data;
+using KLCN_API.Services.Interfaces;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using KLCN_API.Data;
 
 namespace KLCN_API.Jobs;
 
@@ -164,6 +165,81 @@ public class GenerateDailySlotsJob : BackgroundService
             var nextRun = nowVn.Date.AddDays(1).AddMinutes(1);
             var delay = nextRun - nowVn;
 
+            return delay > TimeSpan.Zero ? delay : TimeSpan.FromHours(24);
+        }
+    }
+}
+
+/// <summary>
+/// Tự động tạo snapshot lúc 02:00 sáng giờ VN mỗi ngày.
+/// Đăng ký trong Program.cs:
+///   builder.Services.AddHostedService&lt;DailyBackupJob&gt;();
+/// </summary>
+public class DailyBackupJob : BackgroundService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<DailyBackupJob> _logger;
+
+    public DailyBackupJob(
+        IServiceScopeFactory scopeFactory,
+        ILogger<DailyBackupJob> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("DailyBackupJob started.");
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            var delay = GetDelayUntilNextRun();
+            _logger.LogDebug(
+                "DailyBackupJob next run in {Minutes:F0} minutes.", delay.TotalMinutes);
+
+            await Task.Delay(delay, stoppingToken);
+            if (stoppingToken.IsCancellationRequested) break;
+
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var backupService = scope.ServiceProvider.GetRequiredService<IBackupService>();
+
+                var snapshot = await backupService.CreateSnapshotAsync();
+
+                _logger.LogInformation(
+                    "DailyBackupJob: snapshot tao thanh cong {FileName} ({Size})",
+                    snapshot.FileName, snapshot.SizeLabel);
+            }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "DailyBackupJob: loi khi tao snapshot.");
+            }
+        }
+
+        _logger.LogInformation("DailyBackupJob stopped.");
+    }
+
+    /// <summary>Tính thời gian chờ đến 02:00 sáng giờ VN ngày hôm sau.</summary>
+    private TimeSpan GetDelayUntilNextRun()
+    {
+        try
+        {
+            var tzId = OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh";
+            var vnZone = TimeZoneInfo.FindSystemTimeZoneById(tzId);
+            var nowVn = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vnZone);
+            var nextRun = nowVn.Date.AddDays(1).AddHours(2); // 02:00 ngày mai
+            var delay = nextRun - nowVn;
+            return delay > TimeSpan.Zero ? delay : TimeSpan.FromHours(24);
+        }
+        catch
+        {
+            // Fallback UTC+7 thủ công
+            var nowVn = DateTime.UtcNow.AddHours(7);
+            var nextRun = nowVn.Date.AddDays(1).AddHours(2);
+            var delay = nextRun - nowVn;
             return delay > TimeSpan.Zero ? delay : TimeSpan.FromHours(24);
         }
     }

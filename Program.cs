@@ -32,6 +32,7 @@ builder.Services.AddFrontendSettings(builder.Configuration);
 // Background jobs thay thế SQL Agent (dùng khi host không hỗ trợ SQL Agent)
 builder.Services.AddHostedService<ReleaseExpiredSlotsJob>();
 builder.Services.AddHostedService<GenerateDailySlotsJob>();
+builder.Services.AddHostedService<DailyBackupJob>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IInvoicePdfService, InvoicePdfService>();
 

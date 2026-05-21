@@ -503,3 +503,31 @@ public class SpecialDayResponse
     public string CreatedBy { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
 }
+
+/// <summary>Thông tin một file snapshot lưu trên server.</summary>
+public class BackupSnapshotInfo
+{
+    public string FileName { get; set; } = string.Empty;
+    public long SizeBytes { get; set; }
+    public string SizeLabel => SizeBytes < 1024 * 1024
+        ? $"{SizeBytes / 1024.0:F1} KB"
+        : $"{SizeBytes / 1024.0 / 1024.0:F2} MB";
+    public DateTime CreatedAt { get; set; }
+    public string CreatedAtLabel => CreatedAt.AddHours(7).ToString("dd/MM/yyyy HH:mm:ss");
+}
+
+/// <summary>Báo cáo kết quả restore.</summary>
+public class RestoreReportResponse
+{
+    /// <summary>Tên snapshot tự động tạo trước khi restore (để rollback thủ công nếu cần).</summary>
+    public string PreRestoreSnapshot { get; set; } = string.Empty;
+
+    /// <summary>Thời gian thực hiện restore (ms).</summary>
+    public long ElapsedMs { get; set; }
+
+    /// <summary>Số dòng đã restore từng bảng.</summary>
+    public Dictionary<string, int> RestoredRows { get; set; } = [];
+
+    /// <summary>Tổng số dòng đã restore.</summary>
+    public int TotalRows => RestoredRows.Values.Sum();
+}

@@ -208,6 +208,7 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services)
     {
         services.AddMemoryCache();
+        services.AddScoped<IBackupService, BackupService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IProfileService, ProfileService>();
