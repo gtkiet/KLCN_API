@@ -503,7 +503,7 @@ public class VNPayHelper
             ["vnp_OrderInfo"] = orderInfo,
             ["vnp_OrderType"] = "other",
             ["vnp_Locale"] = "vn",
-            ["vnp_ReturnUrl"] = _settings.ReturnUrl,   // KHÔNG THAY ĐỔI → hash hợp lệ
+            ["vnp_ReturnUrl"] = _settings.ReturnUrl,
             ["vnp_IpAddr"] = ipAddress,
             ["vnp_CreateDate"] = vnTime.ToString("yyyyMMddHHmmss"),
             ["vnp_ExpireDate"] = vnTime.AddMinutes(15).ToString("yyyyMMddHHmmss")
@@ -551,14 +551,6 @@ public class VNPayHelper
                 .Select(kv => $"{kv.Key}={WebUtility.UrlEncode(kv.Value.ToString())}"));
 
         var expectedHash = HmacSha512(_settings.HashSecret, signData);
-
-        // Debug log — xóa khi lên production
-        Console.WriteLine("===== VNPAY SIGNATURE CHECK =====");
-        Console.WriteLine("SIGN DATA: " + signData);
-        Console.WriteLine("EXPECTED : " + expectedHash);
-        Console.WriteLine("RECEIVED : " + receivedHash);
-        Console.WriteLine("MATCH    : " +
-            string.Equals(expectedHash, receivedHash, StringComparison.OrdinalIgnoreCase));
 
         return string.Equals(expectedHash, receivedHash, StringComparison.OrdinalIgnoreCase);
     }

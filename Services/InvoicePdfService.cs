@@ -31,7 +31,6 @@ public class InvoicePdfService : IInvoicePdfService
 
     public Task<byte[]> GenerateAsync(InvoiceDetailResponse invoice)
     {
-        // Khai báo license Community (nếu chưa khai báo ở Program.cs thì khai ở đây)
         QuestPDF.Settings.License = LicenseType.Community;
 
         var pdfBytes = Document.Create(container =>

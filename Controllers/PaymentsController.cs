@@ -33,12 +33,6 @@ public class PaymentsController : ControllerBase
     /// <summary>
     /// Tạo URL thanh toán VNPay.
     ///
-    /// FIX MOBILE: platform được nhúng vào vnp_TxnRef thay vì ReturnUrl.
-    /// Lý do: VNPay ký HMAC trên toàn bộ params bao gồm vnp_ReturnUrl,
-    /// nếu sửa ReturnUrl thì hash thay đổi → VNPay báo lỗi chữ ký.
-    /// vnp_TxnRef là param do mình tự tạo, VNPay echo nguyên vẹn về
-    /// trong cả IPN lẫn Return → đọc platform từ đó an toàn.
-    ///
     /// Format txnRef:
     ///   "{bookingId}_{timestamp}"          (web)
     ///   "{bookingId}_{timestamp}_mobile"   (mobile)
@@ -62,7 +56,6 @@ public class PaymentsController : ControllerBase
             || Request.Headers["X-Platform"].ToString()
                       .Equals("mobile", StringComparison.OrdinalIgnoreCase);
 
-        // Nhúng "_mobile" vào TxnRef suffix — ReturnUrl GIỮ NGUYÊN → hash hợp lệ
         var txnRefSuffix = isMobile ? "_mobile" : string.Empty;
 
         var url = _vnpay.CreatePaymentUrl(
@@ -115,9 +108,6 @@ public class PaymentsController : ControllerBase
     ///
     /// Sandbox fallback: cập nhật DB ở đây vì IPN sandbox không gọi.
     /// Idempotent → không bị ghi đôi khi production có cả IPN lẫn Return.
-    ///
-    /// FIX MOBILE: đọc platform từ suffix "_mobile" trong vnp_TxnRef —
-    /// KHÔNG đọc từ ReturnUrl để tránh lỗi chữ ký VNPay.
     /// </summary>
     [HttpGet("vnpay/return")]
     [AllowAnonymous]

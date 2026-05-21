@@ -29,10 +29,10 @@ public class SupplierService : ISupplierService
 
         return new PagedResponse<SupplierResponse>
         {
-            Items      = items.Select(InventoryMapper.ToResponse).ToList(),
+            Items = items.Select(InventoryMapper.ToResponse).ToList(),
             TotalCount = total,
-            Page       = request.Page,
-            PageSize   = request.PageSize
+            Page = request.Page,
+            PageSize = request.PageSize
         };
     }
 
@@ -43,11 +43,11 @@ public class SupplierService : ISupplierService
 
         var supplier = new Supplier
         {
-            Name        = request.Name.Trim(),
+            Name = request.Name.Trim(),
             ContactName = request.ContactName?.Trim(),
-            Phone       = request.Phone?.Trim(),
-            Email       = request.Email?.Trim().ToLower(),
-            Address     = request.Address?.Trim()
+            Phone = request.Phone?.Trim(),
+            Email = request.Email?.Trim().ToLower(),
+            Address = request.Address?.Trim()
         };
 
         var created = await _supplierRepo.CreateAsync(supplier);
@@ -69,9 +69,9 @@ public class SupplierService : ISupplierService
         }
 
         if (request.ContactName is not null) supplier.ContactName = request.ContactName.Trim();
-        if (request.Phone       is not null) supplier.Phone       = request.Phone.Trim();
-        if (request.Email       is not null) supplier.Email       = request.Email.Trim().ToLower();
-        if (request.Address     is not null) supplier.Address     = request.Address.Trim();
+        if (request.Phone is not null) supplier.Phone = request.Phone.Trim();
+        if (request.Email is not null) supplier.Email = request.Email.Trim().ToLower();
+        if (request.Address is not null) supplier.Address = request.Address.Trim();
 
         await _supplierRepo.UpdateAsync(supplier);
         return InventoryMapper.ToResponse(supplier);

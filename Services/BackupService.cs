@@ -324,7 +324,7 @@ public class BackupService : IBackupService
         ];
 
         foreach (var table in deleteOrder)
-            await _ctx.Database.ExecuteSqlRawAsync($"DELETE FROM [{table}]");
+            await _ctx.Database.ExecuteSqlAsync($"DELETE FROM [{table}]");
     }
 
     /// <summary>
@@ -344,7 +344,7 @@ public class BackupService : IBackupService
         if (items is null || items.Count == 0) return 0;
 
         // SET IDENTITY_INSERT ON — giữ PK gốc
-        await _ctx.Database.ExecuteSqlRawAsync(
+        await _ctx.Database.ExecuteSqlAsync(
             $"SET IDENTITY_INSERT [{tableName}] ON");
         try
         {
@@ -354,7 +354,7 @@ public class BackupService : IBackupService
         finally
         {
             // Luôn tắt lại dù có lỗi
-            await _ctx.Database.ExecuteSqlRawAsync(
+            await _ctx.Database.ExecuteSqlAsync(
                 $"SET IDENTITY_INSERT [{tableName}] OFF");
         }
 

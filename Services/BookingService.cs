@@ -12,7 +12,6 @@ using Microsoft.EntityFrameworkCore;
 
 using BookingEntity = KLCN_API.Models.Entities.Booking;
 using BookingServiceEntity = KLCN_API.Models.Entities.BookingService;
-//using Microsoft.Extensions.Configuration;
 
 namespace KLCN_API.Services;
 
@@ -42,7 +41,6 @@ public class BookingService : IBookingService
 
     public async Task<BookingResponse> CreateBookingAsync(CreateBookingRequest request, int userId)
     {
-        // [FIX Bug 1] Trước đây hardcoded isFullPayment: false, bỏ qua request.IsFullPayment
         return await CreateBookingInternalAsync(
             customerId: userId,
             request: request,
@@ -414,7 +412,6 @@ public class BookingService : IBookingService
         if (booking.UserId != userId)
             throw new ForbiddenException("Bạn không có quyền áp voucher cho booking này.");
 
-        // [FIX Bug 4] Chặn áp voucher nhiều lần
         if (booking.PromotionId.HasValue)
             throw new BusinessException("Booking này đã có voucher áp dụng rồi.", 409);
 
@@ -438,11 +435,6 @@ public class BookingService : IBookingService
         return MapDetail(booking);
     }
 
-    /// <summary>
-    /// [FIX Bug 9] Walk-in dùng sp_ConfirmAdminWalkIn thay vì sp_ConfirmBooking.
-    /// sp_ConfirmAdminWalkIn chiếm slot Available (không cần hold trước),
-    /// trong khi sp_ConfirmBooking yêu cầu slot ở trạng thái Holding.
-    /// </summary>
     private Task ConfirmAdminWalkInAsync(
         int bookingId, string fieldSlotIds, bool isFullPayment, int userId)
         => StoredProcedureHelper.ExecuteSpAsync(

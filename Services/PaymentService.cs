@@ -57,7 +57,6 @@ public class PaymentService : IPaymentService
     /// Cho phép 2 trạng thái:
     ///   Confirmed (2)     : đã cọc, cần trả phần còn lại
     ///   PendingPayment (1): full payment, chưa có giao dịch nào
-    /// [FIX Bug 5] Trước đây chỉ check StatusId=2, bỏ sót luồng IsFullPayment=true (StatusId=1)
     /// </summary>
     public async Task RecordFullPaymentAsync(
     int bookingId, ConfirmPaymentRequest request, int userId)
@@ -195,7 +194,6 @@ public class PaymentService : IPaymentService
     /// - PendingDeposit(5): trả DepositAmount
     /// - PendingPayment(1): trả full TotalAmount (chưa có giao dịch nào)
     /// - Confirmed(2): trả phần còn lại = TotalAmount - TổngĐãTrả
-    /// [FIX Bug 6 & 7] Trước đây luôn dùng TotalAmount, gây overcharge lần 2
     /// </summary>
     public async Task<decimal> GetAmountDueAsync(int bookingId, BookingResponse booking)
     {

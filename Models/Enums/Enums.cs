@@ -85,8 +85,6 @@ public enum PromotionTypeEnum
 ///   VNPay     (3): Cổng VNPay — khách thanh toán online qua VNPay.
 ///   BankTransfer (4): Chuyển khoản ngân hàng — Staff xác nhận thủ công.
 ///
-/// FIX: Bổ sung VNPay (3) và BankTransfer (4) cho khớp với seed data DB.
-/// Trước đó enum chỉ có 2 giá trị, gây lệch khi đọc PaymentMethodId từ DB.
 /// </summary>
 public enum PaymentMethodEnum
 {

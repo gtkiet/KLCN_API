@@ -504,6 +504,10 @@ public class SpecialDayResponse
     public DateTime CreatedAt { get; set; }
 }
 
+// ================================================================
+// Backups & restores
+// ================================================================
+
 /// <summary>Thông tin một file snapshot lưu trên server.</summary>
 public class BackupSnapshotInfo
 {

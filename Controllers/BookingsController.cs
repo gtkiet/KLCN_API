@@ -211,7 +211,7 @@ public class BookingsController : ControllerBase
     ///
     /// TransactionCode:
     ///   - Nếu để trống → server tự sinh mã dạng "DIRECT-{bookingId}-{timestamp}"
-    ///   - Nếu thanh toán bằng chuyển khoản/MoMo offline → điền mã giao dịch thực tế
+    ///   - Nếu thanh toán bằng chuyển khoản/VNPay offline → điền mã giao dịch thực tế
     ///   - Không quan trọng với thanh toán tiền mặt trực tiếp, để trống là ổn
     /// </summary>
     [HttpPost("{bookingId:int}/payment")]

@@ -282,9 +282,6 @@ public interface ISystemConfigService
 // Special days
 // ================================================================
 
-// FIX: Interface đã có định nghĩa nhưng chưa được đăng ký DI.
-// Đã thêm vào AddApplicationServices() và AddRepositories() trong
-// ServiceCollectionExtensions.cs.
 public interface ISpecialDayService
 {
     Task<List<SpecialDayResponse>> GetAllAsync();

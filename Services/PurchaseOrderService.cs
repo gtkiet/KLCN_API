@@ -14,20 +14,20 @@ namespace KLCN_API.Services;
 public class PurchaseOrderService : IPurchaseOrderService
 {
     private readonly IPurchaseOrderRepository _poRepo;
-    private readonly ISupplierRepository      _supplierRepo;
-    private readonly IProductRepository       _productRepo;
-    private readonly SportPlusDbContext        _ctx;
+    private readonly ISupplierRepository _supplierRepo;
+    private readonly IProductRepository _productRepo;
+    private readonly SportPlusDbContext _ctx;
 
     public PurchaseOrderService(
         IPurchaseOrderRepository poRepo,
-        ISupplierRepository      supplierRepo,
-        IProductRepository       productRepo,
-        SportPlusDbContext        ctx)
+        ISupplierRepository supplierRepo,
+        IProductRepository productRepo,
+        SportPlusDbContext ctx)
     {
-        _poRepo       = poRepo;
+        _poRepo = poRepo;
         _supplierRepo = supplierRepo;
-        _productRepo  = productRepo;
-        _ctx          = ctx;
+        _productRepo = productRepo;
+        _ctx = ctx;
     }
 
     public async Task<PurchaseOrderResponse> GetByIdAsync(int purchaseOrderId)
@@ -45,10 +45,10 @@ public class PurchaseOrderService : IPurchaseOrderService
 
         return new PagedResponse<PurchaseOrderResponse>
         {
-            Items      = items.Select(InventoryMapper.ToResponse).ToList(),
+            Items = items.Select(InventoryMapper.ToResponse).ToList(),
             TotalCount = total,
-            Page       = request.Page,
-            PageSize   = request.PageSize
+            Page = request.Page,
+            PageSize = request.PageSize
         };
     }
 
@@ -77,17 +77,17 @@ public class PurchaseOrderService : IPurchaseOrderService
 
         var order = new PurchaseOrder
         {
-            SupplierId      = request.SupplierId,
+            SupplierId = request.SupplierId,
             CreatedByUserId = createdByUserId,
-            StatusId        = (int)PurchaseOrderStatusEnum.Pending,
-            Note            = request.Note?.Trim(),
-            CreatedAt       = DateTime.UtcNow
+            StatusId = (int)PurchaseOrderStatusEnum.Pending,
+            Note = request.Note?.Trim(),
+            CreatedAt = DateTime.UtcNow
         };
 
         var details = request.Items.Select(i => new PurchaseOrderDetail
         {
             ProductId = i.ProductId,
-            Quantity  = i.Quantity,
+            Quantity = i.Quantity,
             UnitPrice = i.UnitPrice
         }).ToList();
 
