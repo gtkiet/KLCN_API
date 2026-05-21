@@ -51,27 +51,58 @@ public class FieldService : IFieldService
         return FieldMapper.ToResponse(field);
     }
 
+    /*    public async Task<FieldResponse> CreateAsync(int adminId, CreateFieldRequest request)
+        {
+            if (request.PeakPrice < request.BasePrice)
+                throw new BusinessException(
+                    "Giá cao điểm phải lớn hơn hoặc bằng giá cơ bản.", 400);
+
+            var field = new Field
+            {
+                Name = request.Name.Trim(),
+                Description = request.Description?.Trim(),
+                BasePrice = request.BasePrice,
+                PeakPrice = request.PeakPrice,
+                TypeId = request.TypeId,
+                ImageUrl = null, // upload ảnh qua endpoint riêng POST /{fieldId}/image
+                StatusId = (int)FieldStatusEnum.Active,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            var created = await _fieldRepo.CreateAsync(field);
+            return FieldMapper.ToResponse(created);
+        }*/
+
+
     public async Task<FieldResponse> CreateAsync(int adminId, CreateFieldRequest request)
     {
-        if (request.PeakPrice < request.BasePrice)
-            throw new BusinessException(
-                "Giá cao điểm phải lớn hơn hoặc bằng giá cơ bản.", 400);
-
-        var field = new Field
+        try
         {
-            Name = request.Name.Trim(),
-            Description = request.Description?.Trim(),
-            BasePrice = request.BasePrice,
-            PeakPrice = request.PeakPrice,
-            TypeId = request.TypeId,
-            ImageUrl = null, // upload ảnh qua endpoint riêng POST /{fieldId}/image
-            StatusId = (int)FieldStatusEnum.Active,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+            if (request.PeakPrice < request.BasePrice)
+                throw new BusinessException(
+                    "Giá cao điểm phải lớn hơn hoặc bằng giá cơ bản.", 400);
 
-        var created = await _fieldRepo.CreateAsync(field);
-        return FieldMapper.ToResponse(created);
+            var field = new Field
+            {
+                Name = request.Name.Trim(),
+                Description = request.Description?.Trim(),
+                BasePrice = request.BasePrice,
+                PeakPrice = request.PeakPrice,
+                TypeId = request.TypeId,
+                ImageUrl = null,
+                StatusId = (int)FieldStatusEnum.Active,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            var created = await _fieldRepo.CreateAsync(field);
+            return FieldMapper.ToResponse(created);
+        }
+        catch (Exception ex)
+        {
+            throw new BusinessException($"Lỗi create field: {ex.Message}", 400);
+        }
     }
 
     public async Task<FieldResponse> UpdateAsync(
