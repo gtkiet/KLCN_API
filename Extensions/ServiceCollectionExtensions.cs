@@ -208,12 +208,14 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services)
     {
         services.AddMemoryCache();
+        services.AddScoped<IBackupService, BackupService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IProfileService, ProfileService>();
         services.AddScoped<IFieldService, FieldService>();
         services.AddScoped<IBookingService, BookingService>();
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<IInvoicePdfService, InvoicePdfService>();
         services.AddScoped<IPromotionService, PromotionService>();
         services.AddScoped<IServiceService, ServiceService>();
 
@@ -226,6 +228,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<ISystemConfigService, SystemConfigService>();
+
+        //services.AddScoped<ISpecialDayService, SpecialDayService>();
 
         return services;
     }
@@ -251,6 +255,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IDashboardRepository, DashboardRepository>();
         services.AddScoped<ISystemConfigRepository, SystemConfigRepository>();
+
+        //services.AddScoped<ISpecialDayRepository, SpecialDayRepository>();
 
         return services;
     }

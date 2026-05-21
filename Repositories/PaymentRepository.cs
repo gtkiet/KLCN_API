@@ -6,8 +6,6 @@ using Microsoft.EntityFrameworkCore;
 namespace KLCN_API.Repositories;
 
 // ── PaymentRepository ─────────────────────────────────────────────
-// INTERFACE (IPaymentRepository) cần bổ sung:
-//   Task<bool> ExistsByTransactionCodeAsync(string transactionCode);
 
 public class PaymentRepository : IPaymentRepository
 {

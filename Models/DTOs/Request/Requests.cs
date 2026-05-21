@@ -161,8 +161,10 @@ public class CreateCustomerByAdminRequest
     [Required]
     public string Phone { get; set; } = string.Empty;
 
-    [Required, MinLength(6)]
-    public string Password { get; set; } = "123456";
+    [Required(ErrorMessage = "Mật khẩu không được để trống.")]
+    [MinLength(6, ErrorMessage = "Mật khẩu tối thiểu 6 ký tự.")]
+    [MaxLength(100)]
+    public string Password { get; set; } = string.Empty;
 
     public int StatusId { get; set; } = 1;
 }
@@ -281,6 +283,7 @@ public class CreateBookingRequest
 
     [MaxLength(500)]
     public string? Note { get; set; }
+
     public bool IsFullPayment { get; set; } = false;
 }
 
@@ -329,13 +332,13 @@ public class CreateWalkInBookingRequest
 
     [Required]
     [MinLength(1, ErrorMessage = "Phải chọn ít nhất 1 slot.")]
-    public List<int> FieldSlotIds { get; set; } = new();
+    public List<int> FieldSlotIds { get; set; } = [];
 
     public string? PromotionCode { get; set; }
 
     public string? Note { get; set; }
 
-    public List<BookingServiceItem> Services { get; set; } = new();
+    public List<BookingServiceItem> Services { get; set; } = [];
 
     // false = tạo booking chờ cọc như flow cũ
     // true  = khách trả đủ tại quầy
@@ -346,6 +349,7 @@ public class CreateWalkInBookingRequest
 
     public string? TransactionCode { get; set; }
 }
+
 public class BookingServiceItem
 {
     [Required]
@@ -408,9 +412,10 @@ public class GetBookingsRequest
 // ================================================================
 // Promotions
 // ================================================================
+
 public class GetPromotionRequest
 {
-    public bool? isActive { get; set; }
+    public bool? IsActive { get; set; }
     public int Page { get; set; } = 1;
     [Range(1, 100)] public int PageSize { get; set; } = 20;
 }
@@ -468,6 +473,7 @@ public class UpdateServiceRequest
 // ================================================================
 // Inventory
 // ================================================================
+
 public class GetSuppliersRequest
 {
     public string? Search { get; set; }

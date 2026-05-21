@@ -19,19 +19,14 @@ public interface IAuthRepository
     Task RevokeAllRefreshTokensAsync(int userId);
     /// <summary>Lưu OTP (đã hash) và thời gian hết hạn cho user.</summary>
     Task SaveOtpAsync(int userId, string otpHash, DateTime expiresAt);
-
     /// <summary>Lấy OTP record còn hiệu lực của user.</summary>
     Task<(string OtpHash, DateTime ExpiresAt)?> GetValidOtpAsync(int userId);
-
     /// <summary>Xoá OTP sau khi đã dùng hoặc hết hạn.</summary>
     Task ClearOtpAsync(int userId);
-
     /// <summary>Lưu reset token (đã hash) sau khi verify OTP thành công.</summary>
     Task SaveResetTokenAsync(int userId, string tokenHash, DateTime expiresAt);
-
     /// <summary>Lấy reset token record còn hiệu lực.</summary>
     Task<(int UserId, DateTime ExpiresAt)?> GetValidResetTokenAsync(string tokenHash);
-
     /// <summary>Xoá reset token sau khi đã dùng.</summary>
     Task ClearResetTokenAsync(string tokenHash);
 }
@@ -44,17 +39,14 @@ public interface IUserRepository
 {
     Task<User?> GetByIdAsync(int userId);
     Task<User?> GetByEmailAsync(string email);
-
     Task<User?> GetByPhoneAsync(string phone);
     Task<(List<User> Items, int TotalCount)> GetUsersAsync(
         string? search, int? roleId, int? statusId, int page, int pageSize);
     Task UpdateRoleAsync(int userId, int roleId);
     Task CreateAsync(User user);
     Task UpdateAsync(User user);
-
     Task UpdateProfileAsync(int userId, string? fullName, string? phone,
         string? avatarUrl, DateOnly? dateOfBirth, string? address);
-
     Task UpdateStatusAsync(int userId, int statusId);
     Task SoftDeleteAsync(int userId);
     Task UpdatePasswordAsync(int userId, string newPasswordHash);
@@ -210,16 +202,7 @@ public interface IIncidentRepository
 // Reviews
 // ================================================================
 
-//public interface IReviewRepository
-//{
-//    Task<Review?> GetByIdAsync(int reviewId);
-//    Task<Review?> GetByBookingAsync(int bookingId);
-//    Task<(List<Review> Items, int TotalCount)> GetReviewsAsync(
-//        int? fieldId, int? rating, bool? isVisible, int page, int pageSize);
-//    Task<Review> CreateAsync(Review review);
-//    Task UpdateVisibilityAsync(int reviewId, bool isVisible);
-//}
-
+// FIX: Bỏ bản comment — giữ duy nhất interface đã có GetFieldRatingRawAsync.
 public interface IReviewRepository
 {
     Task<Review?> GetByIdAsync(int reviewId);
@@ -230,21 +213,6 @@ public interface IReviewRepository
     Task UpdateVisibilityAsync(int reviewId, bool isVisible);
     Task<FieldRatingRaw?> GetFieldRatingRawAsync(int fieldId);
 }
-
-public class FieldRatingRaw
-{
-    public int FieldId { get; set; }
-    public string FieldName { get; set; } = string.Empty;
-    public string FieldType { get; set; } = string.Empty;
-    public int TotalReviews { get; set; }
-    public decimal AvgRating { get; set; }
-    public int Stars5 { get; set; }
-    public int Stars4 { get; set; }
-    public int Stars3 { get; set; }
-    public int Stars2 { get; set; }
-    public int Stars1 { get; set; }
-}
-
 
 // ================================================================
 // Notifications
@@ -297,7 +265,24 @@ public interface IDashboardRepository
     Task<List<RevenueByServiceRaw>> GetRevenueByServiceAsync();
 }
 
-// ── Raw models dùng nội bộ — map từ View/SP, không expose ra ngoài ──
+// ================================================================
+// Raw models — dùng nội bộ Repository/Dashboard, không expose ra ngoài.
+// Map từ View/SP SQL Server, sau đó Service chuyển sang Response DTO.
+// ================================================================
+
+public class FieldRatingRaw
+{
+    public int FieldId { get; set; }
+    public string FieldName { get; set; } = string.Empty;
+    public string FieldType { get; set; } = string.Empty;
+    public int TotalReviews { get; set; }
+    public decimal AvgRating { get; set; }
+    public int Stars5 { get; set; }
+    public int Stars4 { get; set; }
+    public int Stars3 { get; set; }
+    public int Stars2 { get; set; }
+    public int Stars1 { get; set; }
+}
 
 public class DashboardRaw
 {
@@ -333,6 +318,7 @@ public class FieldOccupancyRaw
     public int BookedSlots { get; set; }
     public decimal OccupancyRate { get; set; }
 }
+
 public class RevenueByServiceRaw
 {
     public int ServiceId { get; set; }

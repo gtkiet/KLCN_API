@@ -17,16 +17,16 @@ public class DashboardService : IDashboardService
         // Raw và Response có cùng shape — map thủ công để tường minh
         return new DashboardSummaryResponse
         {
-            PendingBookings        = raw.PendingBookings,
+            PendingBookings = raw.PendingBookings,
             PendingDepositBookings = raw.PendingDepositBookings,
-            TodayConfirmed         = raw.TodayConfirmed,
-            ActiveFields           = raw.ActiveFields,
-            MaintenanceFields      = raw.MaintenanceFields,
-            NewIncidents           = raw.NewIncidents,
-            TodayRevenue           = raw.TodayRevenue,
-            ActiveCustomers        = raw.ActiveCustomers,
-            LowStockCount          = raw.LowStockCount,
-            UrgentDepositCount     = raw.UrgentDepositCount
+            TodayConfirmed = raw.TodayConfirmed,
+            ActiveFields = raw.ActiveFields,
+            MaintenanceFields = raw.MaintenanceFields,
+            NewIncidents = raw.NewIncidents,
+            TodayRevenue = raw.TodayRevenue,
+            ActiveCustomers = raw.ActiveCustomers,
+            LowStockCount = raw.LowStockCount,
+            UrgentDepositCount = raw.UrgentDepositCount
         };
     }
 
@@ -36,10 +36,10 @@ public class DashboardService : IDashboardService
 
         return raws.Select(r => new RevenueByMonthResponse
         {
-            Year            = r.Year,
-            Month           = r.Month,
-            TotalBookings   = r.TotalBookings,
-            TotalRevenue    = r.TotalRevenue,
+            Year = r.Year,
+            Month = r.Month,
+            TotalBookings = r.TotalBookings,
+            TotalRevenue = r.TotalRevenue,
             AvgBookingValue = r.AvgBookingValue
         }).ToList();
     }
@@ -50,13 +50,13 @@ public class DashboardService : IDashboardService
 
         return raws.Select(r => new FieldOccupancyResponse
         {
-            FieldId       = r.FieldId,
-            FieldName     = r.FieldName,
-            FieldType     = r.FieldType,
-            Year          = r.Year,
-            Month         = r.Month,
-            TotalSlots    = r.TotalSlots,
-            BookedSlots   = r.BookedSlots,
+            FieldId = r.FieldId,
+            FieldName = r.FieldName,
+            FieldType = r.FieldType,
+            Year = r.Year,
+            Month = r.Month,
+            TotalSlots = r.TotalSlots,
+            BookedSlots = r.BookedSlots,
             OccupancyRate = r.OccupancyRate
         }).ToList();
     }
@@ -67,11 +67,11 @@ public class DashboardService : IDashboardService
 
         return raws.Select(r => new RevenueByServiceResponse
         {
-            ServiceId          = r.ServiceId,
-            ServiceName        = r.ServiceName,
-            TotalQuantitySold  = r.TotalQuantitySold,
-            TotalRevenue       = r.TotalRevenue,
-            TotalBookings      = r.TotalBookings
+            ServiceId = r.ServiceId,
+            ServiceName = r.ServiceName,
+            TotalQuantitySold = r.TotalQuantitySold,
+            TotalRevenue = r.TotalRevenue,
+            TotalBookings = r.TotalBookings
         }).ToList();
     }
 }

@@ -46,18 +46,13 @@ public class EmailSettings
 
 public class FrontendSettings
 {
-    // Web: "https://yourfrontend.com/booking/{0}/success"
     public string PaymentSuccessUrl { get; set; } = null!;
     public string PaymentFailedUrl { get; set; } = null!;
 
-    // Mobile Flutter deep link: "sportplus://payment/result"
-    // Để trống nếu không có mobile app
     public string? MobileDeepLinkUrl { get; set; }
 
     public bool HasMobileDeepLink
         => !string.IsNullOrWhiteSpace(MobileDeepLinkUrl);
-
-    // ── Web ───────────────────────────────────────────────────────
 
     public string BuildSuccessUrl(int bookingId)
         => string.Format(PaymentSuccessUrl, bookingId);
@@ -65,13 +60,9 @@ public class FrontendSettings
     public string BuildFailedUrl(int bookingId)
         => string.Format(PaymentFailedUrl, bookingId);
 
-    // ── Mobile deep link ──────────────────────────────────────────
-
-    /// <summary>"sportplus://payment/result?status=success&bookingId=88"</summary>
     public string BuildMobileSuccessUrl(int bookingId)
         => $"{MobileDeepLinkUrl}?status=success&bookingId={bookingId}";
 
-    /// <summary>"sportplus://payment/result?status=failed&bookingId=88"</summary>
     public string BuildMobileFailedUrl(int bookingId)
         => $"{MobileDeepLinkUrl}?status=failed&bookingId={bookingId}";
 }

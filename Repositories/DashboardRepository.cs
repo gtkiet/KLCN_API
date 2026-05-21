@@ -28,37 +28,6 @@ public class DashboardRepository : IDashboardRepository
             .OrderBy(r => r.Month)
             .ToListAsync();
 
-    //public async Task<List<FieldOccupancyRaw>> GetOccupancyAsync(int? year, int? month)
-    //{
-    //    var conditions = new List<string>();
-    //    var args = new List<object>();
-    //    int idx = 0;
-
-    //    if (year.HasValue)
-    //    {
-    //        conditions.Add($"[Year] = {{{idx++}}}");
-    //        args.Add(year.Value);
-    //    }
-
-    //    if (month.HasValue)
-    //    {
-    //        conditions.Add($"[Month] = {{{idx++}}}");
-    //        args.Add(month.Value);
-    //    }
-
-    //    var where = conditions.Count > 0
-    //        ? "WHERE " + string.Join(" AND ", conditions)
-    //        : string.Empty;
-
-    //    return await _ctx.Database
-    //        .SqlQueryRaw<FieldOccupancyRaw>(
-    //            $"SELECT * FROM vw_FieldOccupancyByMonth {where}",
-    //            args.ToArray())
-    //        .OrderBy(r => r.FieldId)
-    //        .ThenBy(r => r.Year)
-    //        .ThenBy(r => r.Month)
-    //        .ToListAsync();
-    //}
     public async Task<List<FieldOccupancyRaw>> GetOccupancyAsync(int? year, int? month)
     {
         var sql = """

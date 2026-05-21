@@ -33,34 +33,37 @@ public class PaymentsController : ControllerBase
     /// <summary>
     /// Tạo URL thanh toán VNPay.
     ///
-    /// Tự động tính số tiền cần thanh toán theo trạng thái:
-    ///   PendingDeposit (5) → charge DepositAmount (tiền cọc)
-    ///   PendingPayment (1) → charge full TotalAmount (lần duy nhất)
-    ///   Confirmed      (2) → charge TotalAmount - TổngĐãTrả (phần còn lại)
-    ///
-    /// [FIX Bug 6 & 7] Trước đây luôn dùng TotalAmount, gây overcharge lần 2
-    /// sau khi đã nộp cọc và không chuyển được sang Completed.
+    /// Format txnRef:
+    ///   "{bookingId}_{timestamp}"          (web)
+    ///   "{bookingId}_{timestamp}_mobile"   (mobile)
     /// </summary>
     [HttpPost("vnpay/create/{bookingId:int}")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponse<object>), 200)]
     [ProducesResponseType(typeof(ApiResponse), 400)]
     [ProducesResponseType(typeof(ApiResponse), 404)]
-    public async Task<IActionResult> CreateVNPay(int bookingId)
+    public async Task<IActionResult> CreateVNPay(
+        int bookingId,
+        [FromQuery] string? platform = null)
     {
         var booking = await _paymentService.GetBookingForPaymentAsync(bookingId);
-
-        // [FIX Bug 6 & 7] Tính đúng số tiền cần charge thay vì dùng TotalAmount cứng
         var amountDue = await _paymentService.GetAmountDueAsync(bookingId, booking);
 
         var ip = HttpContext.Connection.RemoteIpAddress?.MapToIPv4().ToString()
-                      ?? "127.0.0.1";
+                 ?? "127.0.0.1";
+
+        var isMobile = platform == "mobile"
+            || Request.Headers["X-Platform"].ToString()
+                      .Equals("mobile", StringComparison.OrdinalIgnoreCase);
+
+        var txnRefSuffix = isMobile ? "_mobile" : string.Empty;
 
         var url = _vnpay.CreatePaymentUrl(
             bookingId,
             amountDue,
             $"Thanh toan san bong SportPlus - Booking #{bookingId}",
-            ip);
+            ip,
+            txnRefSuffix);
 
         return Ok(ApiResponse<object>.Ok(new
         {
@@ -72,9 +75,8 @@ public class PaymentsController : ControllerBase
     }
 
     /// <summary>
-    /// IPN — VNPay gọi server-to-server sau khi giao dịch hoàn tất.
-    /// Không yêu cầu JWT. Đây là nơi DUY NHẤT cập nhật DB.
-    /// RecordOnlinePaymentAsync idempotent theo transactionCode.
+    /// IPN — VNPay gọi server-to-server.
+    /// Sandbox thường không gọi IPN; Return endpoint có fallback.
     /// </summary>
     [HttpGet("vnpay/ipn")]
     [AllowAnonymous]
@@ -86,50 +88,45 @@ public class PaymentsController : ControllerBase
         if (!isSuccess)
             return Ok(new { RspCode = "00", Message = "Confirmed failure" });
 
-        if (!int.TryParse(txnRef.Split('_')[0], out var bookingId))
+        var bookingId = ParseBookingId(txnRef);
+        if (bookingId <= 0)
             return Ok(new { RspCode = "01", Message = "Invalid order" });
 
         if (!decimal.TryParse(Request.Query["vnp_Amount"].ToString(), out var rawAmount))
             return Ok(new { RspCode = "01", Message = "Invalid amount" });
 
-        var amount = rawAmount / 100m;
         var txnCode = Request.Query["vnp_TransactionNo"].ToString();
 
         await _paymentService.RecordOnlinePaymentAsync(
-            bookingId, amount, methodId: 3 /* VNPay */, txnCode);
+            bookingId, rawAmount / 100m, (int)PaymentMethodEnum.VNPay, txnCode);
 
         return Ok(new { RspCode = "00", Message = "Confirm Success" });
     }
 
     /// <summary>
-    /// Return — VNPay redirect trình duyệt về đây sau khi thanh toán.
-    /// KHÔNG cập nhật DB ở đây — IPN đã làm rồi.
-    /// Fallback: nếu IPN sandbox chưa gọi thì xử lý ở đây (idempotent).
+    /// Return — VNPay redirect trình duyệt về đây.
     ///
-    /// Web    → 302 redirect sang web frontend URL.
-    /// Mobile → 302 redirect sang deep link "sportplus://payment/result?..."
+    /// Sandbox fallback: cập nhật DB ở đây vì IPN sandbox không gọi.
+    /// Idempotent → không bị ghi đôi khi production có cả IPN lẫn Return.
     /// </summary>
     [HttpGet("vnpay/return")]
     [AllowAnonymous]
-    public async Task<IActionResult> VNPayReturn([FromQuery] string? platform = null)
+    public async Task<IActionResult> VNPayReturn()
     {
         var isValid = _vnpay.ValidateSignature(Request.Query, out var txnRef, out var isSuccess);
-        var bookingId = int.TryParse(txnRef.Split('_')[0], out var id) ? id : 0;
+        var bookingId = ParseBookingId(txnRef);
 
-        // Fallback: đảm bảo DB được cập nhật ngay cả khi IPN chưa đến
+        // Sandbox fallback — idempotent nhờ ExistsByTransactionCodeAsync
         if (isValid && isSuccess && bookingId > 0
             && decimal.TryParse(Request.Query["vnp_Amount"].ToString(), out var rawAmount))
         {
-            var amount = rawAmount / 100m;
             var txnCode = Request.Query["vnp_TransactionNo"].ToString();
-
             await _paymentService.RecordOnlinePaymentAsync(
-                bookingId, amount, methodId: 3, txnCode);
+                bookingId, rawAmount / 100m, (int)PaymentMethodEnum.VNPay, txnCode);
         }
 
-        var isMobile = platform == "mobile"
-                    || Request.Headers.UserAgent.ToString()
-                           .Contains("Flutter", StringComparison.OrdinalIgnoreCase);
+        // Đọc platform từ TxnRef suffix — ReturnUrl không bị thay đổi
+        var isMobile = txnRef.EndsWith("_mobile", StringComparison.OrdinalIgnoreCase);
 
         string redirectUrl;
 
@@ -160,4 +157,18 @@ public class PaymentsController : ControllerBase
     [AllowAnonymous]
     public IActionResult TestFailed([FromQuery] int bookingId)
         => Ok(new { success = false, message = "Thanh toán thất bại", bookingId });
+
+    // ── Helpers ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parse bookingId từ TxnRef.
+    /// Format: "{bookingId}_{timestamp}" hoặc "{bookingId}_{timestamp}_mobile"
+    /// → lấy phần đầu tiên trước '_'.
+    /// </summary>
+    private static int ParseBookingId(string txnRef)
+    {
+        if (string.IsNullOrWhiteSpace(txnRef)) return 0;
+        var firstPart = txnRef.Split('_')[0];
+        return int.TryParse(firstPart, out var id) ? id : 0;
+    }
 }

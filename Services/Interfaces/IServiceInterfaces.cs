@@ -27,10 +27,8 @@ public interface IUserService
 {
     Task<UserDetailResponse> GetByIdAsync(int userId);
     Task<PagedResponse<UserResponse>> GetUsersAsync(GetUsersRequest request);
-
     Task<UserDetailResponse> CreateStaffAsync(CreateStaffRequest request);
     Task<UserDetailResponse> CreateCustomerByAdminAsync(CreateCustomerByAdminRequest request);
-    //Task<UserDetailResponse> UpdateUserAsync(int userId, UpdateUserRequest request);
     Task UpdateRoleAsync(int userId, int roleId, int requesterId);
     Task LockUserAsync(int userId);
     Task UnlockUserAsync(int userId);
@@ -94,6 +92,7 @@ public interface IBookingService
         int userId, int? statusId, int page, int pageSize);
     Task CancelAsync(int bookingId, CancelBookingRequest request, int userId, bool isAdminOverride);
     Task RescheduleAsync(int bookingId, RescheduleRequest request, int userId);
+    Task AdminRescheduleAsync(int bookingId, RescheduleRequest request, int adminUserId);
     Task ApplyVoucherAsync(int bookingId, ApplyVoucherRequest request, int userId);
     Task<BookingResponse> CreateAdminWalkInBookingAsync(CreateAdminWalkInBookingRequest request, int actorUserId);
     Task CompleteAsync(int bookingId, int userId);
@@ -141,9 +140,23 @@ public interface IPaymentService
     ///   PendingDeposit (5) → DepositAmount
     ///   PendingPayment (1) → TotalAmount (lần đầu, chưa có payment nào)
     ///   Confirmed      (2) → TotalAmount - TổngĐãTrả (phần còn lại)
-    /// [FIX Bug 6 &amp; 7] Tránh overcharge khi charge TotalAmount cứng ở lần thanh toán 2.
+    /// Tránh overcharge khi charge TotalAmount cứng ở lần thanh toán 2.
     /// </summary>
     Task<decimal> GetAmountDueAsync(int bookingId, BookingResponse booking);
+}
+
+// ================================================================
+// Invoice
+// ================================================================
+
+/// <summary>
+/// Tạo file PDF hóa đơn từ InvoiceDetailResponse.
+/// Inject vào InvoicesController để trả về endpoint GET /api/invoices/{id}/pdf.
+/// </summary>
+public interface IInvoicePdfService
+{
+    /// <summary>Trả về mảng byte PDF sẵn sàng để trả về qua FileResult.</summary>
+    Task<byte[]> GenerateAsync(InvoiceDetailResponse invoice);
 }
 
 // ================================================================
@@ -155,10 +168,8 @@ public interface IPromotionService
     Task<PagedResponse<PromotionResponse>> GetPromotionsAsync(GetPromotionRequest request);
     Task<PromotionResponse> GetByIdAsync(int promotionId);
     Task<PromotionResponse> GetByCodeAsync(string code);
-    //Task<PromotionResponse> CreateAsync(CreatePromotionRequest request);
     Task<PromotionResponse> CreateAsync(int adminId, CreatePromotionRequest request);
     Task<PromotionResponse> UpdateAsync(int promotionId, UpdatePromotionRequest request);
-    //Task<PromotionResponse> UpdateAsync(int promotionId, CreatePromotionRequest request);
     Task ToggleActiveAsync(int promotionId);
 }
 
@@ -280,8 +291,37 @@ public interface ISpecialDayService
     Task DeleteAsync(int specialDayId);
 }
 
+// ================================================================
+// Invoice
+// ================================================================
+
 public interface IInvoiceService
 {
     Task<PagedResponse<InvoiceListItemResponse>> GetInvoicesAsync(DateOnly? date, int page = 1, int pageSize = 20);
     Task<InvoiceDetailResponse> GetInvoiceByPaymentIdAsync(int paymentId);
+}
+
+public interface IBackupService
+{
+    /// <summary>Export toàn bộ dữ liệu → (zipBytes, fileName).</summary>
+    Task<(byte[] ZipBytes, string FileName)> ExportAsync();
+
+    /// <summary>Tạo snapshot lưu trên server, trả về thông tin file.</summary>
+    Task<BackupSnapshotInfo> CreateSnapshotAsync();
+
+    /// <summary>Liệt kê các snapshot đang có trên server.</summary>
+    Task<List<BackupSnapshotInfo>> ListSnapshotsAsync();
+
+    /// <summary>Đọc nội dung một snapshot để download.</summary>
+    Task<byte[]> DownloadSnapshotAsync(string fileName);
+
+    /// <summary>Xóa một snapshot trên server.</summary>
+    Task DeleteSnapshotAsync(string fileName);
+
+    /// <summary>
+    /// Restore dữ liệu từ stream của file .zip backup.
+    /// Tự snapshot hiện tại trước khi restore.
+    /// Chạy trong transaction — rollback toàn bộ nếu lỗi.
+    /// </summary>
+    Task<RestoreReportResponse> RestoreAsync(Stream zipStream, int adminUserId);
 }

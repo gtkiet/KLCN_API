@@ -29,10 +29,10 @@ public class ProductService : IProductService
 
         return new PagedResponse<ProductResponse>
         {
-            Items      = items.Select(InventoryMapper.ToResponse).ToList(),
+            Items = items.Select(InventoryMapper.ToResponse).ToList(),
             TotalCount = total,
-            Page       = request.Page,
-            PageSize   = request.PageSize
+            Page = request.Page,
+            PageSize = request.PageSize
         };
     }
 
@@ -43,10 +43,10 @@ public class ProductService : IProductService
 
         var product = new Product
         {
-            Name     = request.Name.Trim(),
-            Unit     = request.Unit?.Trim(),
+            Name = request.Name.Trim(),
+            Unit = request.Unit?.Trim(),
             StockQty = request.InitialStock,
-            MinQty   = request.MinQty
+            MinQty = request.MinQty
         };
 
         var created = await _productRepo.CreateAsync(product);
@@ -67,7 +67,7 @@ public class ProductService : IProductService
             product.Name = trimmedName;
         }
 
-        if (request.Unit   is not null) product.Unit   = request.Unit.Trim();
+        if (request.Unit is not null) product.Unit = request.Unit.Trim();
         if (request.MinQty is not null) product.MinQty = request.MinQty.Value;
 
         await _productRepo.UpdateAsync(product);

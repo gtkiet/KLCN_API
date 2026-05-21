@@ -8,10 +8,10 @@ using KLCN_API.Models.Enums;
 using KLCN_API.Repositories.Interfaces;
 using KLCN_API.Services.Interfaces;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+
 using BookingEntity = KLCN_API.Models.Entities.Booking;
 using BookingServiceEntity = KLCN_API.Models.Entities.BookingService;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 
 namespace KLCN_API.Services;
 
@@ -41,7 +41,6 @@ public class BookingService : IBookingService
 
     public async Task<BookingResponse> CreateBookingAsync(CreateBookingRequest request, int userId)
     {
-        // [FIX Bug 1] Trước đây hardcoded isFullPayment: false, bỏ qua request.IsFullPayment
         return await CreateBookingInternalAsync(
             customerId: userId,
             request: request,
@@ -52,8 +51,6 @@ public class BookingService : IBookingService
             transactionCode: null,
             isAdminWalkIn: false);
     }
-
-    // ── Create booking at counter (walk-in) ──────────────────────
 
     // ── Create booking at counter (walk-in) ──────────────────────
 
@@ -384,6 +381,26 @@ public class BookingService : IBookingService
             _ctx, request.BookingDetailId, request.NewFieldSlotId, userId);
     }
 
+    // ── Reschedule (Admin/Staff override) ────────────────────────
+
+    /// <summary>
+    /// Đổi lịch slot — Admin/Staff, không kiểm tra ownership.
+    /// Theo đề cương: admin/staff có quyền hủy/đổi lịch đặt sân bất kỳ.
+    ///
+    /// Khác RescheduleAsync ở chỗ bỏ check booking.UserId == userId,
+    /// nên admin có thể đổi hộ bất kỳ booking nào.
+    /// </summary>
+    public async Task AdminRescheduleAsync(
+        int bookingId, RescheduleRequest request, int adminUserId)
+    {
+        // Chỉ cần kiểm tra booking tồn tại, không check ownership
+        _ = await _bookingRepo.GetByIdAsync(bookingId)
+            ?? throw new NotFoundException("Booking", bookingId);
+
+        await StoredProcedureHelper.RescheduleBookingAsync(
+            _ctx, request.BookingDetailId, request.NewFieldSlotId, adminUserId);
+    }
+
     // ── Apply voucher ─────────────────────────────────────────────
 
     public async Task ApplyVoucherAsync(
@@ -395,7 +412,6 @@ public class BookingService : IBookingService
         if (booking.UserId != userId)
             throw new ForbiddenException("Bạn không có quyền áp voucher cho booking này.");
 
-        // [FIX Bug 4] Chặn áp voucher nhiều lần
         if (booking.PromotionId.HasValue)
             throw new BusinessException("Booking này đã có voucher áp dụng rồi.", 409);
 
@@ -419,11 +435,6 @@ public class BookingService : IBookingService
         return MapDetail(booking);
     }
 
-    /// <summary>
-    /// [FIX Bug 9] Walk-in dùng sp_ConfirmAdminWalkIn thay vì sp_ConfirmBooking.
-    /// sp_ConfirmAdminWalkIn chiếm slot Available (không cần hold trước),
-    /// trong khi sp_ConfirmBooking yêu cầu slot ở trạng thái Holding.
-    /// </summary>
     private Task ConfirmAdminWalkInAsync(
         int bookingId, string fieldSlotIds, bool isFullPayment, int userId)
         => StoredProcedureHelper.ExecuteSpAsync(

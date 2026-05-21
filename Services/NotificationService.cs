@@ -24,10 +24,10 @@ public class NotificationService : INotificationService
 
         return new PagedResponse<NotificationResponse>
         {
-            Items      = items.Select(NotificationMapper.ToResponse).ToList(),
+            Items = items.Select(NotificationMapper.ToResponse).ToList(),
             TotalCount = total,
-            Page       = request.Page,
-            PageSize   = request.PageSize
+            Page = request.Page,
+            PageSize = request.PageSize
         };
     }
 
@@ -52,12 +52,12 @@ public class NotificationService : INotificationService
     {
         var notification = new Notification
         {
-            UserId    = userId,
-            Title     = title,
-            Body      = body,
-            Type      = type,
-            RefId     = refId,
-            IsRead    = false,
+            UserId = userId,
+            Title = title,
+            Body = body,
+            Type = type,
+            RefId = refId,
+            IsRead = false,
             CreatedAt = DateTime.UtcNow
         };
 

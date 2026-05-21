@@ -34,11 +34,11 @@ public enum FieldSlotStatusEnum
 
 public enum BookingStatusEnum
 {
-    PendingPayment = 1,  // Slot đang giữ, chưa tạo booking chính thức
-    Confirmed = 2,  // Đã nộp cọc thành công
+    PendingPayment = 1,     // Slot đang giữ, chưa tạo booking chính thức
+    Confirmed = 2,          // Đã nộp cọc thành công
     Cancelled = 3,
     Completed = 4,
-    PendingDeposit = 5   // Đã tạo booking, đang chờ khách nộp cọc
+    PendingDeposit = 5      // Đã tạo booking, đang chờ khách nộp cọc
 }
 
 public enum PaymentStatusEnum
@@ -78,14 +78,20 @@ public enum PromotionTypeEnum
 }
 
 /// <summary>
-/// Phương thức thanh toán — chỉ có 2 loại:
-///   Direct (1): Trực tiếp tại quầy — Staff dùng để ghi nhận phần còn lại sau cọc.
-///   MoMo   (2): Bắt buộc dùng để đặt cọc online trước khi booking được xác nhận.
+/// Phương thức thanh toán — đồng bộ với bảng PaymentMethods trong DB (seed data).
+///
+///   Direct    (1): Tiền mặt tại quầy — Staff dùng khi ghi nhận thanh toán offline.
+///   MoMo      (2): Ví MoMo — khách thanh toán online qua cổng MoMo.
+///   VNPay     (3): Cổng VNPay — khách thanh toán online qua VNPay.
+///   BankTransfer (4): Chuyển khoản ngân hàng — Staff xác nhận thủ công.
+///
 /// </summary>
 public enum PaymentMethodEnum
 {
     Direct = 1,
-    MoMo = 2
+    MoMo = 2,
+    VNPay = 3,
+    BankTransfer = 4
 }
 
 public enum NotificationType
