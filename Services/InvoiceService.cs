@@ -16,6 +16,41 @@ public class InvoiceService : IInvoiceService
         _ctx = ctx;
     }
 
+    private static (bool IsGuest, string GuestName, string GuestPhone) ExtractGuestInfo(string? note)
+    {
+        if (string.IsNullOrWhiteSpace(note))
+            return (false, string.Empty, string.Empty);
+
+        const string prefix = "[KHÁCH VÃNG LAI]";
+        var trimmed = note.Trim();
+
+        if (!trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return (false, string.Empty, string.Empty);
+
+        var raw = trimmed.Substring(prefix.Length).Trim();
+
+        // Nếu note có thêm phần ghi chú phía sau:
+        // [KHÁCH VÃNG LAI] chị Liễu - 098765322 | ghi chú thêm
+        var pipeIndex = raw.IndexOf('|');
+        if (pipeIndex >= 0)
+            raw = raw.Substring(0, pipeIndex).Trim();
+
+        string guestName = raw;
+        string guestPhone = string.Empty;
+
+        var lastDashIndex = raw.LastIndexOf(" - ", StringComparison.Ordinal);
+        if (lastDashIndex >= 0)
+        {
+            guestName = raw.Substring(0, lastDashIndex).Trim();
+            guestPhone = raw.Substring(lastDashIndex + 3).Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(guestName))
+            guestName = "Khách vãng lai";
+
+        return (true, guestName, guestPhone);
+    }
+
     public async Task<PagedResponse<InvoiceListItemResponse>> GetInvoicesAsync(DateOnly? date, int page = 1, int pageSize = 20)
     {
         if (page <= 0) page = 1;
@@ -32,22 +67,38 @@ public class InvoiceService : IInvoiceService
             .Where(p => p.PaidAt.HasValue
                         && p.PaidAt.Value >= from
                         && p.PaidAt.Value < to
-                        && p.StatusId == 2); // giả sử 2 = thành công
+                        && p.StatusId == 2);
 
         var totalCount = await query.CountAsync();
 
-        var items = await query
+        var rawItems = await query
             .OrderByDescending(p => p.PaidAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(p => new InvoiceListItemResponse
+            .Select(p => new
             {
-                PaymentId = p.PaymentId,
+                p.PaymentId,
                 InvoiceCode = $"INV-{p.PaidAt!.Value:yyyyMMdd}-{p.PaymentId:D5}",
-                CustomerName = p.Booking.User.FullName,
+                BookingNote = p.Booking.Note,
+                UserFullName = p.Booking.User.FullName,
                 Amount = p.Amount
             })
             .ToListAsync();
+
+        var items = rawItems
+            .Select(x =>
+            {
+                var guest = ExtractGuestInfo(x.BookingNote);
+
+                return new InvoiceListItemResponse
+                {
+                    PaymentId = x.PaymentId,
+                    InvoiceCode = x.InvoiceCode,
+                    CustomerName = guest.IsGuest ? guest.GuestName : x.UserFullName,
+                    Amount = x.Amount
+                };
+            })
+            .ToList();
 
         return new PagedResponse<InvoiceListItemResponse>
         {
@@ -83,15 +134,17 @@ public class InvoiceService : IInvoiceService
         if (payment == null)
             throw new NotFoundException("Hóa đơn", paymentId);
 
+        var guest = ExtractGuestInfo(payment.Booking.Note);
+
         return new InvoiceDetailResponse
         {
             PaymentId = payment.PaymentId,
             InvoiceCode = $"INV-{(payment.PaidAt ?? payment.CreatedAt):yyyyMMdd}-{payment.PaymentId:D5}",
 
             BookingId = payment.BookingId,
-            CustomerName = payment.Booking.User.FullName,
-            CustomerPhone = payment.Booking.User.Phone,
-            CustomerEmail = payment.Booking.User.Email,
+            CustomerName = guest.IsGuest ? guest.GuestName : payment.Booking.User.FullName,
+            CustomerPhone = guest.IsGuest ? guest.GuestPhone : payment.Booking.User.Phone,
+            CustomerEmail = guest.IsGuest ? string.Empty : payment.Booking.User.Email,
 
             Amount = payment.Amount,
             PaymentMethod = payment.Method.Name,

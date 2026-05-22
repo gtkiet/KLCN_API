@@ -445,56 +445,104 @@ public class BookingService : IBookingService
             new SqlParameter("@UserId", userId));
 
     // ── Mappers ───────────────────────────────────────────────────
-
-    private static BookingResponse MapDetail(BookingEntity b) => new()
+    private static (bool IsGuest, string GuestName, string GuestPhone) ExtractGuestInfo(string? note)
     {
-        BookingId = b.BookingId,
-        Customer = UserMapper.ToResponse(b.User),
-        Status = b.Status?.Name ?? string.Empty,
-        StatusId = b.StatusId,
-        SubTotal = b.SubTotal,
-        DiscountAmount = b.DiscountAmount,
-        TaxAmount = b.TaxAmount,
-        TotalAmount = b.TotalAmount,
-        DepositAmount = b.DepositAmount,
-        PromotionCode = b.Promotion?.Code,
-        Note = b.Note,
-        CancelReason = b.CancelReason,
-        RescheduleCount = b.RescheduleCount,
-        CreatedAt = b.CreatedAt,
-        UpdatedAt = b.UpdatedAt,
-        Details = b.BookingDetails?.Select(d => new BookingDetailResponse
+        if (string.IsNullOrWhiteSpace(note))
+            return (false, string.Empty, string.Empty);
+
+        const string prefix = "[KHÁCH VÃNG LAI]";
+        var trimmed = note.Trim();
+
+        if (!trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return (false, string.Empty, string.Empty);
+
+        var raw = trimmed.Substring(prefix.Length).Trim();
+
+        // Nếu có thêm note phía sau dạng: [KHÁCH VÃNG LAI] A - 0909 | ghi chú thêm
+        var pipeIndex = raw.IndexOf('|');
+        if (pipeIndex >= 0)
+            raw = raw.Substring(0, pipeIndex).Trim();
+
+        string guestName = raw;
+        string guestPhone = string.Empty;
+
+        var lastDashIndex = raw.LastIndexOf(" - ", StringComparison.Ordinal);
+        if (lastDashIndex >= 0)
         {
-            BookingDetailId = d.BookingDetailId,
-            FieldId = d.FieldSlot.FieldId,
-            FieldName = d.FieldSlot.Field?.Name ?? string.Empty,
-            FieldType = d.FieldSlot.Field?.Type?.Name ?? string.Empty,
-            SlotDate = d.FieldSlot.SlotDate,
-            StartTime = d.FieldSlot.TimeSlot.StartTime,
-            EndTime = d.FieldSlot.TimeSlot.EndTime,
-            Price = d.Price
-        }).ToList() ?? new List<BookingDetailResponse>(),
-        Services = b.BookingServices?.Select(bs => new BookingServiceResponse
-        {
-            ServiceId = bs.ServiceId,
-            ServiceName = bs.Service?.Name ?? string.Empty,
-            Quantity = bs.Quantity,
-            UnitPrice = bs.UnitPrice
-        }).ToList() ?? new List<BookingServiceResponse>(),
-        Deposit = b.Deposit is null ? null : new DepositResponse
-        {
-            DepositId = b.Deposit.DepositId,
-            BookingId = b.BookingId,
-            RequiredAmount = b.Deposit.RequiredAmount,
-            PaidAmount = b.Deposit.PaidAmount,
-            Status = b.Deposit.Status?.Name ?? string.Empty,
-            StatusId = b.Deposit.StatusId,
-            DeadlineAt = b.Deposit.DeadlineAt,
-            MinutesLeft = Math.Max(0,
-                (int)(b.Deposit.DeadlineAt - DateTime.UtcNow).TotalMinutes),
-            PaidAt = b.Deposit.PaidAt
+            guestName = raw.Substring(0, lastDashIndex).Trim();
+            guestPhone = raw.Substring(lastDashIndex + 3).Trim();
         }
-    };
+
+        if (string.IsNullOrWhiteSpace(guestName))
+            guestName = "Khách vãng lai";
+
+        return (true, guestName, guestPhone);
+    }
+
+    private static BookingResponse MapDetail(BookingEntity b)
+    {
+        var guest = ExtractGuestInfo(b.Note);
+
+        var customer = guest.IsGuest
+            ? new UserResponse
+            {
+                UserId = b.UserId,
+                FullName = guest.GuestName,
+                Email = string.Empty,
+                Phone = guest.GuestPhone
+            }
+            : UserMapper.ToResponse(b.User);
+
+        return new BookingResponse
+        {
+            BookingId = b.BookingId,
+            Customer = customer,
+            Status = b.Status?.Name ?? string.Empty,
+            StatusId = b.StatusId,
+            SubTotal = b.SubTotal,
+            DiscountAmount = b.DiscountAmount,
+            TaxAmount = b.TaxAmount,
+            TotalAmount = b.TotalAmount,
+            DepositAmount = b.DepositAmount,
+            PromotionCode = b.Promotion?.Code,
+            Note = b.Note,
+            CancelReason = b.CancelReason,
+            RescheduleCount = b.RescheduleCount,
+            CreatedAt = b.CreatedAt,
+            UpdatedAt = b.UpdatedAt,
+            Details = b.BookingDetails?.Select(d => new BookingDetailResponse
+            {
+                BookingDetailId = d.BookingDetailId,
+                FieldId = d.FieldSlot.FieldId,
+                FieldName = d.FieldSlot.Field?.Name ?? string.Empty,
+                FieldType = d.FieldSlot.Field?.Type?.Name ?? string.Empty,
+                SlotDate = d.FieldSlot.SlotDate,
+                StartTime = d.FieldSlot.TimeSlot.StartTime,
+                EndTime = d.FieldSlot.TimeSlot.EndTime,
+                Price = d.Price
+            }).ToList() ?? new List<BookingDetailResponse>(),
+            Services = b.BookingServices?.Select(bs => new BookingServiceResponse
+            {
+                ServiceId = bs.ServiceId,
+                ServiceName = bs.Service?.Name ?? string.Empty,
+                Quantity = bs.Quantity,
+                UnitPrice = bs.UnitPrice
+            }).ToList() ?? new List<BookingServiceResponse>(),
+            Deposit = b.Deposit is null ? null : new DepositResponse
+            {
+                DepositId = b.Deposit.DepositId,
+                BookingId = b.BookingId,
+                RequiredAmount = b.Deposit.RequiredAmount,
+                PaidAmount = b.Deposit.PaidAmount,
+                Status = b.Deposit.Status?.Name ?? string.Empty,
+                StatusId = b.Deposit.StatusId,
+                DeadlineAt = b.Deposit.DeadlineAt,
+                MinutesLeft = Math.Max(0,
+                    (int)(b.Deposit.DeadlineAt - DateTime.UtcNow).TotalMinutes),
+                PaidAt = b.Deposit.PaidAt
+            }
+        };
+    }
 
     private static BookingSummaryResponse MapSummary(BookingEntity b)
     {
@@ -503,11 +551,17 @@ public class BookingService : IBookingService
             .ThenBy(d => d.FieldSlot.TimeSlot.StartTime)
             .FirstOrDefault();
 
+        var guest = ExtractGuestInfo(b.Note);
+
         return new BookingSummaryResponse
         {
             BookingId = b.BookingId,
-            CustomerName = b.User?.FullName ?? string.Empty,
-            CustomerPhone = b.User?.Phone ?? string.Empty,
+            CustomerName = guest.IsGuest
+                ? guest.GuestName
+                : (b.User?.FullName ?? string.Empty),
+            CustomerPhone = guest.IsGuest
+                ? guest.GuestPhone
+                : (b.User?.Phone ?? string.Empty),
             Status = b.Status?.Name ?? string.Empty,
             StatusId = b.StatusId,
             TotalAmount = b.TotalAmount,

@@ -265,6 +265,7 @@ public interface IDashboardService
     Task<List<RevenueByMonthResponse>> GetRevenueByMonthAsync(int year);
     Task<List<FieldOccupancyResponse>> GetOccupancyAsync(int? year, int? month);
     Task<List<RevenueByServiceResponse>> GetRevenueByServiceAsync();
+    Task<MonthlyReportResponse> GetMonthlyReportAsync(int year, int month);
 }
 
 // ================================================================

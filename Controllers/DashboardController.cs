@@ -67,4 +67,17 @@ public class DashboardController : ControllerBase
         var result = await _dashService.GetRevenueByServiceAsync();
         return Ok(ApiResponse<List<RevenueByServiceResponse>>.Ok(result));
     }
+
+    [HttpGet("monthly-report")]
+    [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
+    [ProducesResponseType(typeof(ApiResponse<MonthlyReportResponse>), 200)]
+    public async Task<IActionResult> GetMonthlyReport([FromQuery] int? year, [FromQuery] int? month)
+    {
+        var now = DateTime.UtcNow;
+        var targetYear = year ?? now.Year;
+        var targetMonth = month ?? now.Month;
+
+        var result = await _dashService.GetMonthlyReportAsync(targetYear, targetMonth);
+        return Ok(ApiResponse<MonthlyReportResponse>.Ok(result));
+    }
 }
