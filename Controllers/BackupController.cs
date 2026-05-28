@@ -105,6 +105,23 @@ public class BackupController : ControllerBase
         return Ok(ApiResponse<RestoreReportResponse>.Ok(report, "Restore thành công."));
     }
 
+    /// <summary>
+    /// Restore trực tiếp từ snapshot trên server — Admin.
+    /// Không cần tải .zip về máy rồi upload lại.
+    /// Tự snapshot trước khi restore. Rollback nếu lỗi.
+    /// </summary>
+    [HttpPost("snapshots/{fileName}/restore")]
+    [Authorize]
+    [AuthorizeRoles(RoleEnum.Admin)]
+    [ProducesResponseType(typeof(ApiResponse<RestoreReportResponse>), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 404)]
+    public async Task<IActionResult> RestoreFromSnapshot(string fileName)
+    {
+        var report = await _backupService.RestoreFromSnapshotAsync(fileName, User.GetUserId());
+        return Ok(ApiResponse<RestoreReportResponse>.Ok(report,
+            $"Restore từ snapshot '{fileName}' thành công."));
+    }
+
     // ================================================================
     // EMERGENCY ENDPOINTS — KHÔNG cần JWT
     // Bảo vệ bằng X-Emergency-Key header (secret key trong appsettings)
@@ -149,6 +166,30 @@ public class BackupController : ControllerBase
 
         var zipBytes = await _backupService.DownloadSnapshotAsync(fileName);
         return File(zipBytes, "application/zip", fileName);
+    }
+
+    /// <summary>
+    /// [EMERGENCY] Restore trực tiếp từ snapshot trên server — không cần đăng nhập.
+    /// Header: X-Emergency-Key: {EmergencyKey}
+    ///
+    /// Dùng khi DB mất hoàn toàn nhưng snapshot vẫn còn trên server.
+    /// Không cần tải file về máy rồi upload lại.
+    /// </summary>
+    [HttpPost("emergency/snapshots/{fileName}/restore")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiResponse<RestoreReportResponse>), 200)]
+    [ProducesResponseType(401)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> EmergencyRestoreFromSnapshot(
+        string fileName,
+        [FromHeader(Name = "X-Emergency-Key")] string? emergencyKey)
+    {
+        if (!ValidateEmergencyKey(emergencyKey))
+            return Unauthorized(ApiResponse.Fail("Emergency key không hợp lệ."));
+
+        var report = await _backupService.RestoreFromSnapshotAsync(fileName, adminUserId: 0);
+        return Ok(ApiResponse<RestoreReportResponse>.Ok(report,
+            $"Restore khẩn cấp từ snapshot '{fileName}' thành công. Hãy đăng nhập bằng tài khoản admin đã khôi phục."));
     }
 
     /// <summary>

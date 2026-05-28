@@ -325,4 +325,6 @@ public interface IBackupService
     /// Chạy trong transaction — rollback toàn bộ nếu lỗi.
     /// </summary>
     Task<RestoreReportResponse> RestoreAsync(Stream zipStream, int adminUserId);
+
+    Task<RestoreReportResponse> RestoreFromSnapshotAsync(string fileName, int adminUserId);
 }

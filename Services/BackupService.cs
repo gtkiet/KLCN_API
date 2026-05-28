@@ -6,7 +6,6 @@ using System.Text.Json.Serialization;
 using KLCN_API.Data;
 using KLCN_API.Middleware;
 using KLCN_API.Models.DTOs.Response;
-using KLCN_API.Models.Entities;
 using KLCN_API.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,20 +18,17 @@ namespace KLCN_API.Services;
 ///
 /// Cấu trúc file .zip:
 ///   SportPlus_Backup_20260521_143000.zip
-///   ├── manifest.json          (version, timestamp, danh sách bảng)
+///   ├── manifest.json
+///   ├── _lookup_Roles.json              (upsert khi restore, không xóa trước)
+///   ├── _lookup_UserStatuses.json
+///   ├── ... (tất cả lookup tables)
+///   ├── _system_SystemConfig.json       (upsert khi restore)
 ///   ├── Users.json
-///   ├── Profiles.json
-///   ├── ... (xem BackupService.TableOrder)
 ///   └── Notifications.json
-///
-/// Bảng KHÔNG backup (lookup cố định):
-///   Roles, UserStatuses, FieldTypes, FieldStatuses, FieldSlotStatuses,
-///   BookingStatuses, PaymentStatuses, PaymentMethods, DepositStatuses,
-///   IncidentStatuses, PurchaseOrderStatuses, PromotionTypes, SystemConfig
 /// </summary>
 public class BackupService : IBackupService
 {
-    private const string BackupVersion = "1.0";
+    private const string BackupVersion = "1.1";
     private const string SnapshotFolder = "Backups";
     private const int MaxSnapshots = 30;
 
@@ -43,8 +39,18 @@ public class BackupService : IBackupService
         Converters = { new DateOnlyJsonConverter(), new TimeOnlyJsonConverter() }
     };
 
-    // Thứ tự restore theo FK (parent trước, child sau)
-    private static readonly string[] TableOrder =
+    // ── Lookup tables: có IDENTITY, upsert khi restore (không xóa trước) ──────
+    // Thứ tự đủ để FK trong bảng data trỏ vào đúng ID.
+    private static readonly string[] LookupTableOrder =
+    [
+        "Roles", "UserStatuses", "FieldTypes", "FieldStatuses", "FieldSlotStatuses",
+        "BookingStatuses", "PaymentStatuses", "PaymentMethods", "DepositStatuses",
+        "IncidentStatuses", "PurchaseOrderStatuses", "PromotionTypes"
+    ];
+
+    // ── Bảng data: xóa sạch rồi insert lại khi restore ───────────────────────
+    // Thứ tự: parent trước, child sau.
+    private static readonly string[] DataTableOrder =
     [
         "Users", "Profiles", "RefreshTokens",
         "Fields", "FieldPriceHistory", "TimeSlots", "FieldSlots", "FieldMaintenanceLogs",
@@ -55,6 +61,67 @@ public class BackupService : IBackupService
         "Payments", "Deposits",
         "Incidents", "Reviews", "Notifications"
     ];
+
+    // Tất cả bảng được backup (lookup + data) — dùng để whitelist tên bảng.
+    private static readonly HashSet<string> AllowedTables =
+        new(LookupTableOrder.Concat(DataTableOrder).Append("SystemConfig"),
+            StringComparer.Ordinal);
+
+    // Whitelist cột theo từng bảng — khớp chính xác với schema SQL.
+    private static readonly Dictionary<string, HashSet<string>> AllowedColumns =
+        new(StringComparer.Ordinal)
+        {
+            // ── Lookup tables (chỉ có ID + Name) ───────────────────────────
+            ["Roles"] = ["RoleId", "Name"],
+            ["UserStatuses"] = ["StatusId", "Name"],
+            ["FieldTypes"] = ["TypeId", "Name"],
+            ["FieldStatuses"] = ["StatusId", "Name"],
+            ["FieldSlotStatuses"] = ["StatusId", "Name"],
+            ["BookingStatuses"] = ["StatusId", "Name"],
+            ["PaymentStatuses"] = ["StatusId", "Name"],
+            ["PaymentMethods"] = ["MethodId", "Name"],
+            ["DepositStatuses"] = ["StatusId", "Name"],
+            ["IncidentStatuses"] = ["StatusId", "Name"],
+            ["PurchaseOrderStatuses"] = ["StatusId", "Name"],
+            ["PromotionTypes"] = ["TypeId", "Name"],
+
+            // ── SystemConfig (PK là string, không có IDENTITY) ──────────────
+            ["SystemConfig"] = ["ConfigKey", "ConfigValue", "DataType", "Description", "UpdatedAt", "UpdatedBy"],
+
+            // ── Data tables ─────────────────────────────────────────────────
+            ["Users"] = ["UserId", "Email", "Phone", "PasswordHash", "FullName", "RoleId", "StatusId", "CreatedAt", "UpdatedAt", "IsDeleted"],
+            ["Profiles"] = ["ProfileId", "UserId", "AvatarUrl", "DateOfBirth", "Address"],
+            ["RefreshTokens"] = ["TokenId", "UserId", "Token", "ExpiresAt", "IsRevoked", "CreatedAt"],
+
+            ["Fields"] = ["FieldId", "Name", "Description", "BasePrice", "PeakPrice", "ImageUrl", "TypeId", "StatusId", "IsDeleted", "CreatedAt", "UpdatedAt"],
+            ["FieldPriceHistory"] = ["HistoryId", "FieldId", "OldBasePrice", "OldPeakPrice", "NewBasePrice", "NewPeakPrice", "ChangedBy", "ChangedAt", "Reason"],
+            ["TimeSlots"] = ["SlotId", "StartTime", "EndTime", "IsPeakHour"],
+            ["FieldSlots"] = ["FieldSlotId", "FieldId", "SlotId", "SlotDate", "Price", "StatusId", "HoldExpireAt", "UpdatedAt"],
+            ["FieldMaintenanceLogs"] = ["LogId", "FieldId", "Reason", "StartDate", "EndDate", "CreatedBy", "CreatedAt"],
+
+            ["SpecialDays"] = ["SpecialDayId", "SpecialDate", "Name", "PriceMultiplier", "IsFullDayPeak", "Note", "CreatedBy", "CreatedAt"],
+            ["PeakSchedules"] = ["PeakScheduleId", "DayOfWeek", "SlotId", "IsPeak"],
+
+            ["Services"] = ["ServiceId", "Name", "Description", "Price", "ImageUrl", "IsAvailable", "IsDeleted", "UpdatedAt"],
+            ["Promotions"] = ["PromotionId", "Code", "Name", "Description", "TypeId", "DiscountValue", "MaxDiscount", "MinOrderAmount", "UsageLimit", "UsageCount", "StartDate", "EndDate", "IsActive", "CreatedBy", "CreatedAt"],
+
+            ["Suppliers"] = ["SupplierId", "Name", "ContactName", "Phone", "Email", "Address", "IsDeleted"],
+            ["Products"] = ["ProductId", "Name", "Unit", "StockQty", "MinQty", "IsDeleted"],
+            ["PurchaseOrders"] = ["PurchaseOrderId", "SupplierId", "CreatedByUserId", "StatusId", "TotalAmount", "Note", "ConfirmedAt", "CreatedAt"],
+            ["PurchaseOrderDetails"] = ["PurchaseOrderDetailId", "PurchaseOrderId", "ProductId", "Quantity", "UnitPrice"],
+
+            ["Bookings"] = ["BookingId", "UserId", "PromotionId", "StatusId", "SubTotal", "DiscountAmount", "TaxAmount", "TotalAmount", "DepositAmount", "Note", "CancelReason", "RescheduleCount", "CreatedAt", "UpdatedAt"],
+            ["BookingDetails"] = ["BookingDetailId", "BookingId", "FieldSlotId", "Price"],
+            ["BookingServices"] = ["BookingServiceId", "BookingId", "ServiceId", "Quantity", "UnitPrice"],
+            ["BookingLogs"] = ["LogId", "BookingId", "OldStatusId", "NewStatusId", "ChangedByUserId", "Note", "ChangedAt"],
+
+            ["Payments"] = ["PaymentId", "BookingId", "Amount", "MethodId", "StatusId", "TransactionCode", "GatewayResponse", "Note", "PaidAt", "CreatedAt"],
+            ["Deposits"] = ["DepositId", "BookingId", "RequiredAmount", "PaidAmount", "StatusId", "DeadlineAt", "PaidAt", "RefundedAt", "ForfeitedAt", "PaymentId", "Note", "CreatedAt", "UpdatedAt"],
+
+            ["Incidents"] = ["IncidentId", "FieldId", "ReportedByUserId", "Title", "Description", "ImageUrl", "StatusId", "HandledByUserId", "HandledAt", "HandledNote", "CreatedAt"],
+            ["Reviews"] = ["ReviewId", "BookingId", "FieldId", "UserId", "Rating", "Comment", "ImageUrl", "IsVisible", "CreatedAt", "UpdatedAt"],
+            ["Notifications"] = ["NotificationId", "UserId", "Title", "Body", "Type", "RefId", "IsRead", "CreatedAt"],
+        };
 
     private readonly SportPlusDbContext _ctx;
     private readonly IWebHostEnvironment _env;
@@ -81,9 +148,7 @@ public class BackupService : IBackupService
         var dir = GetSnapshotDir();
         Directory.CreateDirectory(dir);
 
-        // Xóa snapshot cũ nhất nếu vượt giới hạn
-        var existing = Directory.GetFiles(dir, "*.zip")
-                                .OrderBy(f => f).ToList();
+        var existing = Directory.GetFiles(dir, "*.zip").OrderBy(f => f).ToList();
         while (existing.Count >= MaxSnapshots)
         {
             File.Delete(existing[0]);
@@ -146,21 +211,28 @@ public class BackupService : IBackupService
 
     // ── Restore ───────────────────────────────────────────────────
 
+    public async Task<RestoreReportResponse> RestoreFromSnapshotAsync(string fileName, int adminUserId)
+    {
+        var path = GetSnapshotPath(fileName);
+        if (!File.Exists(path))
+            throw new NotFoundException($"Snapshot '{fileName}' không tồn tại.");
+
+        await using var stream = File.OpenRead(path);
+        return await RestoreAsync(stream, adminUserId);
+    }
+
     public async Task<RestoreReportResponse> RestoreAsync(Stream zipStream, int adminUserId)
     {
         var sw = Stopwatch.StartNew();
 
-        // 1. Tự động snapshot trước khi restore
         var preSnapshot = await CreateSnapshotAsync();
 
-        // 2. Đọc toàn bộ zip vào memory
         using var ms = new MemoryStream();
         await zipStream.CopyToAsync(ms);
         ms.Position = 0;
 
         using var archive = new ZipArchive(ms, ZipArchiveMode.Read);
 
-        // 3. Kiểm tra manifest
         var manifestEntry = archive.GetEntry("manifest.json")
             ?? throw new BusinessException("File backup không hợp lệ (thiếu manifest.json).", 400);
 
@@ -168,52 +240,63 @@ public class BackupService : IBackupService
         var manifest = await JsonSerializer.DeserializeAsync<BackupManifest>(manifestStream, JsonOpts)
             ?? throw new BusinessException("Không đọc được manifest.json.", 400);
 
-        if (manifest.Version != BackupVersion)
+        // Chấp nhận cả version 1.0 (cũ, không có lookup) và 1.1 (mới, có lookup)
+        if (manifest.Version != BackupVersion && manifest.Version != "1.0")
             throw new BusinessException(
-                $"Phiên bản backup không tương thích " +
-                $"(file: {manifest.Version}, hệ thống: {BackupVersion}).", 400);
+                $"Phiên bản backup không tương thích (file: {manifest.Version}, hệ thống: {BackupVersion}).", 400);
 
-        // 4. Đọc dữ liệu từ zip trước khi mở transaction
         var data = await ReadAllEntriesAsync(archive);
 
-        // 5. Restore trong transaction
-        var report = new RestoreReportResponse
-        {
-            PreRestoreSnapshot = preSnapshot.FileName
-        };
+        var report = new RestoreReportResponse { PreRestoreSnapshot = preSnapshot.FileName };
 
         await using var tx = await _ctx.Database.BeginTransactionAsync();
         try
         {
-            await DeleteAllTablesAsync();
-            await _ctx.SaveChangesAsync();
+            // Bước 1: Xóa toàn bộ data tables theo thứ tự FK ngược
+            await DeleteDataTablesAsync();
 
-            // Tắt IDENTITY_INSERT theo từng bảng, insert, bật lại
-            report.RestoredRows["Users"] = await InsertWithIdentityAsync("Users", data, "Users.json", _ctx.Users);
-            report.RestoredRows["Profiles"] = await InsertWithIdentityAsync("Profiles", data, "Profiles.json", _ctx.Profiles);
-            report.RestoredRows["RefreshTokens"] = await InsertWithIdentityAsync("RefreshTokens", data, "RefreshTokens.json", _ctx.RefreshTokens);
-            report.RestoredRows["Fields"] = await InsertWithIdentityAsync("Fields", data, "Fields.json", _ctx.Fields);
-            report.RestoredRows["FieldPriceHistory"] = await InsertWithIdentityAsync("FieldPriceHistory", data, "FieldPriceHistory.json", _ctx.FieldPriceHistories);
-            report.RestoredRows["TimeSlots"] = await InsertWithIdentityAsync("TimeSlots", data, "TimeSlots.json", _ctx.TimeSlots);
-            report.RestoredRows["FieldSlots"] = await InsertWithIdentityAsync("FieldSlots", data, "FieldSlots.json", _ctx.FieldSlots);
-            report.RestoredRows["FieldMaintenanceLogs"] = await InsertWithIdentityAsync("FieldMaintenanceLogs", data, "FieldMaintenanceLogs.json", _ctx.FieldMaintenanceLogs);
-            report.RestoredRows["SpecialDays"] = await InsertWithIdentityAsync("SpecialDays", data, "SpecialDays.json", _ctx.SpecialDays);
-            report.RestoredRows["PeakSchedules"] = await InsertWithIdentityAsync("PeakSchedules", data, "PeakSchedules.json", _ctx.PeakSchedules);
-            report.RestoredRows["Services"] = await InsertWithIdentityAsync("Services", data, "Services.json", _ctx.Services);
-            report.RestoredRows["Promotions"] = await InsertWithIdentityAsync("Promotions", data, "Promotions.json", _ctx.Promotions);
-            report.RestoredRows["Suppliers"] = await InsertWithIdentityAsync("Suppliers", data, "Suppliers.json", _ctx.Suppliers);
-            report.RestoredRows["Products"] = await InsertWithIdentityAsync("Products", data, "Products.json", _ctx.Products);
-            report.RestoredRows["PurchaseOrders"] = await InsertWithIdentityAsync("PurchaseOrders", data, "PurchaseOrders.json", _ctx.PurchaseOrders);
-            report.RestoredRows["PurchaseOrderDetails"] = await InsertWithIdentityAsync("PurchaseOrderDetails", data, "PurchaseOrderDetails.json", _ctx.PurchaseOrderDetails);
-            report.RestoredRows["Bookings"] = await InsertWithIdentityAsync("Bookings", data, "Bookings.json", _ctx.Bookings);
-            report.RestoredRows["BookingDetails"] = await InsertWithIdentityAsync("BookingDetails", data, "BookingDetails.json", _ctx.BookingDetails);
-            report.RestoredRows["BookingServices"] = await InsertWithIdentityAsync("BookingServices", data, "BookingServices.json", _ctx.BookingServices);
-            report.RestoredRows["BookingLogs"] = await InsertWithIdentityAsync("BookingLogs", data, "BookingLogs.json", _ctx.BookingLogs);
-            report.RestoredRows["Payments"] = await InsertWithIdentityAsync("Payments", data, "Payments.json", _ctx.Payments);
-            report.RestoredRows["Deposits"] = await InsertWithIdentityAsync("Deposits", data, "Deposits.json", _ctx.Deposits);
-            report.RestoredRows["Incidents"] = await InsertWithIdentityAsync("Incidents", data, "Incidents.json", _ctx.Incidents);
-            report.RestoredRows["Reviews"] = await InsertWithIdentityAsync("Reviews", data, "Reviews.json", _ctx.Reviews);
-            report.RestoredRows["Notifications"] = await InsertWithIdentityAsync("Notifications", data, "Notifications.json", _ctx.Notifications);
+            // Bước 2: Upsert lookup tables + SystemConfig
+            // Dùng MERGE để không bị lỗi duplicate nếu lookup vẫn còn trong DB.
+            // Với backup version 1.0 (cũ) thì bỏ qua vì không có file lookup.
+            if (manifest.Version == "1.1")
+            {
+                foreach (var table in LookupTableOrder)
+                {
+                    var entryKey = $"_lookup_{table}.json";
+                    var count = await UpsertLookupAsync(table, data, entryKey);
+                    report.RestoredRows[$"[lookup] {table}"] = count;
+                }
+
+                var sysCount = await UpsertSystemConfigAsync(data, "_system_SystemConfig.json");
+                report.RestoredRows["[lookup] SystemConfig"] = sysCount;
+            }
+
+            // Bước 3: Insert data tables theo thứ tự FK
+            report.RestoredRows["Users"] = await BulkInsertJsonAsync("Users", data, "Users.json");
+            report.RestoredRows["Profiles"] = await BulkInsertJsonAsync("Profiles", data, "Profiles.json");
+            report.RestoredRows["RefreshTokens"] = await BulkInsertJsonAsync("RefreshTokens", data, "RefreshTokens.json");
+            report.RestoredRows["Fields"] = await BulkInsertJsonAsync("Fields", data, "Fields.json");
+            report.RestoredRows["FieldPriceHistory"] = await BulkInsertJsonAsync("FieldPriceHistory", data, "FieldPriceHistory.json");
+            report.RestoredRows["TimeSlots"] = await BulkInsertJsonAsync("TimeSlots", data, "TimeSlots.json");
+            report.RestoredRows["FieldSlots"] = await BulkInsertJsonAsync("FieldSlots", data, "FieldSlots.json");
+            report.RestoredRows["FieldMaintenanceLogs"] = await BulkInsertJsonAsync("FieldMaintenanceLogs", data, "FieldMaintenanceLogs.json");
+            report.RestoredRows["SpecialDays"] = await BulkInsertJsonAsync("SpecialDays", data, "SpecialDays.json");
+            report.RestoredRows["PeakSchedules"] = await BulkInsertJsonAsync("PeakSchedules", data, "PeakSchedules.json");
+            report.RestoredRows["Services"] = await BulkInsertJsonAsync("Services", data, "Services.json");
+            report.RestoredRows["Promotions"] = await BulkInsertJsonAsync("Promotions", data, "Promotions.json");
+            report.RestoredRows["Suppliers"] = await BulkInsertJsonAsync("Suppliers", data, "Suppliers.json");
+            report.RestoredRows["Products"] = await BulkInsertJsonAsync("Products", data, "Products.json");
+            report.RestoredRows["PurchaseOrders"] = await BulkInsertJsonAsync("PurchaseOrders", data, "PurchaseOrders.json");
+            report.RestoredRows["PurchaseOrderDetails"] = await BulkInsertJsonAsync("PurchaseOrderDetails", data, "PurchaseOrderDetails.json");
+            report.RestoredRows["Bookings"] = await BulkInsertJsonAsync("Bookings", data, "Bookings.json");
+            report.RestoredRows["BookingDetails"] = await BulkInsertJsonAsync("BookingDetails", data, "BookingDetails.json");
+            report.RestoredRows["BookingServices"] = await BulkInsertJsonAsync("BookingServices", data, "BookingServices.json");
+            report.RestoredRows["BookingLogs"] = await BulkInsertJsonAsync("BookingLogs", data, "BookingLogs.json");
+            report.RestoredRows["Payments"] = await BulkInsertJsonAsync("Payments", data, "Payments.json");
+            report.RestoredRows["Deposits"] = await BulkInsertJsonAsync("Deposits", data, "Deposits.json");
+            report.RestoredRows["Incidents"] = await BulkInsertJsonAsync("Incidents", data, "Incidents.json");
+            report.RestoredRows["Reviews"] = await BulkInsertJsonAsync("Reviews", data, "Reviews.json");
+            report.RestoredRows["Notifications"] = await BulkInsertJsonAsync("Notifications", data, "Notifications.json");
 
             await tx.CommitAsync();
         }
@@ -235,16 +318,51 @@ public class BackupService : IBackupService
         using var ms = new MemoryStream();
         using var archive = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true);
 
+        var allTables = LookupTableOrder
+            .Select(t => $"_lookup_{t}")
+            .Append("_system_SystemConfig")
+            .Concat(DataTableOrder)
+            .ToList();
+
         var manifest = new BackupManifest
         {
             Version = BackupVersion,
             CreatedAt = DateTime.UtcNow,
-            Tables = TableOrder.ToList()
+            Tables = allTables
         };
-        await WriteEntryAsync(archive, "manifest.json",
-            JsonSerializer.Serialize(manifest, JsonOpts));
+        await WriteEntryAsync(archive, "manifest.json", JsonSerializer.Serialize(manifest, JsonOpts));
 
-        // Serialize từng bảng — AsNoTracking để không load navigation
+        // Lookup tables — dùng IDENTITY_INSERT khi restore, nên cần export cả ID
+        await WriteEntryAsync(archive, "_lookup_Roles.json",
+            Serialize(await _ctx.Roles.AsNoTracking().ToListAsync()));
+        await WriteEntryAsync(archive, "_lookup_UserStatuses.json",
+            Serialize(await _ctx.UserStatuses.AsNoTracking().ToListAsync()));
+        await WriteEntryAsync(archive, "_lookup_FieldTypes.json",
+            Serialize(await _ctx.FieldTypes.AsNoTracking().ToListAsync()));
+        await WriteEntryAsync(archive, "_lookup_FieldStatuses.json",
+            Serialize(await _ctx.FieldStatuses.AsNoTracking().ToListAsync()));
+        await WriteEntryAsync(archive, "_lookup_FieldSlotStatuses.json",
+            Serialize(await _ctx.FieldSlotStatuses.AsNoTracking().ToListAsync()));
+        await WriteEntryAsync(archive, "_lookup_BookingStatuses.json",
+            Serialize(await _ctx.BookingStatuses.AsNoTracking().ToListAsync()));
+        await WriteEntryAsync(archive, "_lookup_PaymentStatuses.json",
+            Serialize(await _ctx.PaymentStatuses.AsNoTracking().ToListAsync()));
+        await WriteEntryAsync(archive, "_lookup_PaymentMethods.json",
+            Serialize(await _ctx.PaymentMethods.AsNoTracking().ToListAsync()));
+        await WriteEntryAsync(archive, "_lookup_DepositStatuses.json",
+            Serialize(await _ctx.DepositStatuses.AsNoTracking().ToListAsync()));
+        await WriteEntryAsync(archive, "_lookup_IncidentStatuses.json",
+            Serialize(await _ctx.IncidentStatuses.AsNoTracking().ToListAsync()));
+        await WriteEntryAsync(archive, "_lookup_PurchaseOrderStatuses.json",
+            Serialize(await _ctx.PurchaseOrderStatuses.AsNoTracking().ToListAsync()));
+        await WriteEntryAsync(archive, "_lookup_PromotionTypes.json",
+            Serialize(await _ctx.PromotionTypes.AsNoTracking().ToListAsync()));
+
+        // SystemConfig — không có IDENTITY, dùng MERGE khi restore
+        await WriteEntryAsync(archive, "_system_SystemConfig.json",
+            Serialize(await _ctx.SystemConfigs.AsNoTracking().ToListAsync()));
+
+        // Data tables
         await WriteEntryAsync(archive, "Users.json",
             Serialize(await _ctx.Users.AsNoTracking().ToListAsync()));
         await WriteEntryAsync(archive, "Profiles.json",
@@ -303,12 +421,15 @@ public class BackupService : IBackupService
     // ── Restore helpers ───────────────────────────────────────────
 
     /// <summary>
-    /// Xóa dữ liệu theo thứ tự ngược FK để tránh constraint violation.
-    /// Dùng DELETE thay vì TRUNCATE vì các bảng có FK reference lẫn nhau.
+    /// Xóa toàn bộ data tables theo thứ tự FK ngược.
+    /// Không xóa lookup tables và SystemConfig — chúng được upsert riêng.
     /// </summary>
-    private async Task DeleteAllTablesAsync()
+    private async Task DeleteDataTablesAsync()
     {
-        // Thứ tự: child trước, parent sau
+        // SystemConfig có FK UpdatedBy → Users, cần null trước khi xóa Users
+        await _ctx.Database.ExecuteSqlAsync(
+            $"UPDATE SystemConfig SET UpdatedBy = NULL WHERE UpdatedBy IS NOT NULL");
+
         string[] deleteOrder =
         [
             "Notifications", "Reviews", "Incidents",
@@ -324,48 +445,182 @@ public class BackupService : IBackupService
         ];
 
         foreach (var table in deleteOrder)
-            await _ctx.Database.ExecuteSqlAsync($"DELETE FROM [{table}]");
+        {
+            if (!AllowedTables.Contains(table))
+                throw new InvalidOperationException($"Table '{table}' không nằm trong whitelist.");
+
+            // table đã validate qua AllowedTables — an toàn để nhúng vào SQL.
+            // ReSharper disable once EntityFramework.MightBeUnsafeInterpolation
+#pragma warning disable EF1002
+            await _ctx.Database.ExecuteSqlRawAsync($"DELETE FROM [{table}]");
+#pragma warning restore EF1002
+        }
     }
 
     /// <summary>
-    /// Insert với IDENTITY_INSERT ON để giữ nguyên PK từ backup.
-    /// Bắt buộc phải giữ PK gốc vì các bảng con dùng FK trỏ về PK đó.
+    /// Upsert lookup table dùng MERGE: nếu ID đã tồn tại thì UPDATE Name,
+    /// nếu chưa có thì INSERT với IDENTITY_INSERT ON.
+    /// Đảm bảo ID không thay đổi → tất cả FK trong data tables vẫn hợp lệ.
     /// </summary>
-    private async Task<int> InsertWithIdentityAsync<T>(
+    private async Task<int> UpsertLookupAsync(
         string tableName,
         Dictionary<string, string> data,
-        string entryKey,
-        DbSet<T> dbSet) where T : class
+        string entryKey)
     {
         if (!data.TryGetValue(entryKey, out var json) || string.IsNullOrWhiteSpace(json))
             return 0;
 
-        var items = JsonSerializer.Deserialize<List<T>>(json, JsonOpts);
-        if (items is null || items.Count == 0) return 0;
+        if (!AllowedColumns.TryGetValue(tableName, out var allowedCols))
+            throw new InvalidOperationException($"Không tìm thấy whitelist cột cho table '{tableName}'.");
 
-        // SET IDENTITY_INSERT ON — giữ PK gốc
-        await _ctx.Database.ExecuteSqlAsync(
-            $"SET IDENTITY_INSERT [{tableName}] ON");
-        try
-        {
-            await dbSet.AddRangeAsync(items);
-            await _ctx.SaveChangesAsync();
-        }
-        finally
-        {
-            // Luôn tắt lại dù có lỗi
-            await _ctx.Database.ExecuteSqlAsync(
-                $"SET IDENTITY_INSERT [{tableName}] OFF");
-        }
+        using var doc = JsonDocument.Parse(json);
+        var rowCount = doc.RootElement.GetArrayLength();
+        if (rowCount == 0) return 0;
 
-        // Detach để EF không track lại khi xử lý bảng khác
-        foreach (var item in items)
-            _ctx.Entry(item).State = EntityState.Detached;
+        // Xác định tên PK của lookup table từ JSON (cột đầu tiên không phải Name)
+        var firstRow = doc.RootElement[0];
+        var pkCol = firstRow.EnumerateObject()
+            .Select(p => p.Name)
+            .First(n => allowedCols.Contains(n) && n != "Name");
 
-        return items.Count;
+        // MERGE: match theo PK, update Name nếu khác, insert nếu chưa có
+        // IDENTITY_INSERT ON để giữ nguyên ID gốc khi insert row mới
+        var sql = $"""
+            SET IDENTITY_INSERT [{tableName}] ON;
+            MERGE [{tableName}] AS target
+            USING (
+                SELECT [{pkCol}], [Name]
+                FROM OPENJSON(@json)
+                WITH (
+                    [{pkCol}] nvarchar(max) '$.{pkCol}',
+                    [Name]    nvarchar(max) '$.Name'
+                )
+            ) AS src ON target.[{pkCol}] = src.[{pkCol}]
+            WHEN MATCHED AND target.[Name] <> src.[Name]
+                THEN UPDATE SET target.[Name] = src.[Name]
+            WHEN NOT MATCHED BY TARGET
+                THEN INSERT ([{pkCol}], [Name]) VALUES (src.[{pkCol}], src.[Name]);
+            SET IDENTITY_INSERT [{tableName}] OFF;
+            """;
+
+        await _ctx.Database.ExecuteSqlRawAsync(sql,
+            new Microsoft.Data.SqlClient.SqlParameter("@json", json)
+            {
+                SqlDbType = System.Data.SqlDbType.NVarChar,
+                Size = -1
+            });
+
+        return rowCount;
     }
 
-    /// <summary>Đọc toàn bộ entry trong zip vào Dictionary trước khi xử lý.</summary>
+    /// <summary>
+    /// Upsert SystemConfig dùng MERGE theo ConfigKey (PK string, không có IDENTITY).
+    /// Chỉ update ConfigValue và DataType — giữ nguyên Description.
+    /// </summary>
+    private async Task<int> UpsertSystemConfigAsync(
+        Dictionary<string, string> data,
+        string entryKey)
+    {
+        if (!data.TryGetValue(entryKey, out var json) || string.IsNullOrWhiteSpace(json))
+            return 0;
+
+        using var doc = JsonDocument.Parse(json);
+        var rowCount = doc.RootElement.GetArrayLength();
+        if (rowCount == 0) return 0;
+
+        const string sql = """
+            MERGE [SystemConfig] AS target
+            USING (
+                SELECT [ConfigKey], [ConfigValue], [DataType], [Description]
+                FROM OPENJSON(@json)
+                WITH (
+                    [ConfigKey]   nvarchar(max) '$.ConfigKey',
+                    [ConfigValue] nvarchar(max) '$.ConfigValue',
+                    [DataType]    nvarchar(max) '$.DataType',
+                    [Description] nvarchar(max) '$.Description'
+                )
+            ) AS src ON target.[ConfigKey] = src.[ConfigKey]
+            WHEN MATCHED
+                THEN UPDATE SET
+                    target.[ConfigValue] = src.[ConfigValue],
+                    target.[DataType]    = src.[DataType],
+                    target.[Description] = src.[Description]
+            WHEN NOT MATCHED BY TARGET
+                THEN INSERT ([ConfigKey], [ConfigValue], [DataType], [Description])
+                     VALUES (src.[ConfigKey], src.[ConfigValue], src.[DataType], src.[Description]);
+            """;
+
+        await _ctx.Database.ExecuteSqlRawAsync(sql,
+            new Microsoft.Data.SqlClient.SqlParameter("@json", json)
+            {
+                SqlDbType = System.Data.SqlDbType.NVarChar,
+                Size = -1
+            });
+
+        return rowCount;
+    }
+
+    /// <summary>
+    /// BulkInsert dùng raw SQL thông qua SQL Server OPENJSON.
+    ///
+    /// SQL injection protection:
+    ///   - tableName    → validate qua AllowedTables (whitelist cứng trong code)
+    ///   - column names → validate qua AllowedColumns[tableName] (whitelist cứng trong code)
+    ///   - json data    → SqlParameter @json, KHÔNG nhúng vào SQL string
+    /// </summary>
+    private async Task<int> BulkInsertJsonAsync(
+        string tableName,
+        Dictionary<string, string> data,
+        string entryKey)
+    {
+        if (!data.TryGetValue(entryKey, out var json) || string.IsNullOrWhiteSpace(json))
+            return 0;
+
+        if (!AllowedTables.Contains(tableName))
+            throw new InvalidOperationException($"Table '{tableName}' không nằm trong whitelist.");
+
+        if (!AllowedColumns.TryGetValue(tableName, out var allowedCols))
+            throw new InvalidOperationException($"Không tìm thấy whitelist cột cho table '{tableName}'.");
+
+        using var doc = JsonDocument.Parse(json);
+        var rowCount = doc.RootElement.GetArrayLength();
+        if (rowCount == 0) return 0;
+
+        var firstRow = doc.RootElement[0];
+        var columns = firstRow.EnumerateObject()
+            .Select(p => p.Name)
+            .Where(name => allowedCols.Contains(name))
+            .ToList();
+
+        if (columns.Count == 0)
+            throw new InvalidOperationException(
+                $"Không có cột hợp lệ nào trong backup entry '{entryKey}'.");
+
+        var colList = string.Join(", ", columns.Select(c => $"[{c}]"));
+        var withClause = string.Join(",\n    ", columns.Select(c =>
+            $"[{c}] nvarchar(max) '$.{c}'"));
+
+        var sql = $"""
+            SET IDENTITY_INSERT [{tableName}] ON;
+            INSERT INTO [{tableName}] ({colList})
+            SELECT {colList}
+            FROM OPENJSON(@json)
+            WITH (
+                {withClause}
+            );
+            SET IDENTITY_INSERT [{tableName}] OFF;
+            """;
+
+        await _ctx.Database.ExecuteSqlRawAsync(sql,
+            new Microsoft.Data.SqlClient.SqlParameter("@json", json)
+            {
+                SqlDbType = System.Data.SqlDbType.NVarChar,
+                Size = -1
+            });
+
+        return rowCount;
+    }
+
     private static async Task<Dictionary<string, string>> ReadAllEntriesAsync(ZipArchive archive)
     {
         var data = new Dictionary<string, string>();
@@ -396,7 +651,6 @@ public class BackupService : IBackupService
 
     private string GetSnapshotPath(string fileName)
     {
-        // Path traversal protection — chỉ lấy tên file, bỏ directory
         var safe = Path.GetFileName(fileName);
         if (string.IsNullOrWhiteSpace(safe) || safe != fileName)
             throw new BusinessException("Tên file không hợp lệ.", 400);
@@ -409,7 +663,7 @@ public class BackupService : IBackupService
 
 internal class BackupManifest
 {
-    public string Version { get; set; } = "1.0";
+    public string Version { get; set; } = "1.1";
     public DateTime CreatedAt { get; set; }
     public List<string> Tables { get; set; } = [];
 }
