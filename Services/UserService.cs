@@ -95,32 +95,32 @@ public class UserService : IUserService
                 ?? throw new NotFoundException("Người dùng", user.UserId));
     }
 
-    //public async Task<UserDetailResponse> UpdateUserAsync(int userId, UpdateUserRequest request)
-    //{
-    //    var user = await _userRepo.GetByIdAsync(userId)
-    //        ?? throw new NotFoundException("Người dùng", userId);
+    public async Task<UserDetailResponse> UpdateUserAsync(int userId, UpdateUserRequest request)
+    {
+        var user = await _userRepo.GetByIdAsync(userId)
+            ?? throw new NotFoundException("Người dùng", userId);
 
-    //    // Kiểm tra duplicate email/phone — bỏ qua nếu là chính user đó
-    //    var byEmail = await _userRepo.GetByEmailAsync(request.Email);
-    //    if (byEmail is not null && byEmail.UserId != userId)
-    //        throw new ConflictException("Email đã tồn tại trong hệ thống.");
+        // Kiểm tra duplicate email/phone — bỏ qua nếu là chính user đó
+        var byEmail = await _userRepo.GetByEmailAsync(request.Email);
+        if (byEmail is not null && byEmail.UserId != userId)
+            throw new ConflictException("Email đã tồn tại trong hệ thống.");
 
-    //    var byPhone = await _userRepo.GetByPhoneAsync(request.Phone);
-    //    if (byPhone is not null && byPhone.UserId != userId)
-    //        throw new ConflictException("Số điện thoại đã tồn tại trong hệ thống.");
+        var byPhone = await _userRepo.GetByPhoneAsync(request.Phone);
+        if (byPhone is not null && byPhone.UserId != userId)
+            throw new ConflictException("Số điện thoại đã tồn tại trong hệ thống.");
 
-    //    user.FullName = request.FullName.Trim();
-    //    user.Email = request.Email.Trim().ToLower();
-    //    user.Phone = request.Phone.Trim();
-    //    user.StatusId = request.StatusId > 0 ? request.StatusId : user.StatusId;
-    //    user.UpdatedAt = DateTime.UtcNow;
+        user.FullName = request.FullName.Trim();
+        user.Email = request.Email.Trim().ToLower();
+        user.Phone = request.Phone.Trim();
+        user.StatusId = request.StatusId > 0 ? request.StatusId : user.StatusId;
+        user.UpdatedAt = DateTime.UtcNow;
 
-    //    await _userRepo.UpdateAsync(user);
+        await _userRepo.UpdateAsync(user);
 
-    //    return UserMapper.ToDetailResponse(
-    //        await _userRepo.GetByIdAsync(userId)
-    //            ?? throw new NotFoundException("Người dùng", userId));
-    //}
+        return UserMapper.ToDetailResponse(
+            await _userRepo.GetByIdAsync(userId)
+                ?? throw new NotFoundException("Người dùng", userId));
+    }
 
     /// <summary>
     /// Đổi role user — chỉ Admin, không thể đổi role của chính mình,

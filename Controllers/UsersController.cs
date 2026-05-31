@@ -66,18 +66,18 @@ public class UsersController : ControllerBase
     }
 
     ///// <summary>Cập nhật thông tin user — Admin và Staff.</summary>
-    //[HttpPut("{userId:int}")]
-    //[AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
-    //[ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), 200)]
-    //[ProducesResponseType(typeof(ApiResponse), 400)]
-    //[ProducesResponseType(typeof(ApiResponse), 404)]
-    //[ProducesResponseType(typeof(ApiResponse), 409)]
-    //public async Task<IActionResult> Update(
-    //    int userId, [FromBody] UpdateUserRequest request)
-    //{
-    //    var result = await _userService.UpdateUserAsync(userId, request);
-    //    return Ok(ApiResponse<UserDetailResponse>.Ok(result, "Cập nhật thành công."));
-    //}
+    [HttpPut("{userId:int}")]
+    [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
+    [ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), 200)]
+    [ProducesResponseType(typeof(ApiResponse), 400)]
+    [ProducesResponseType(typeof(ApiResponse), 404)]
+    [ProducesResponseType(typeof(ApiResponse), 409)]
+    public async Task<IActionResult> Update(
+        int userId, [FromBody] UpdateUserRequest request)
+    {
+        var result = await _userService.UpdateUserAsync(userId, request);
+        return Ok(ApiResponse<UserDetailResponse>.Ok(result, "Cập nhật thành công."));
+    }
 
     /// <summary>
     /// Đổi role user — chỉ Admin.
