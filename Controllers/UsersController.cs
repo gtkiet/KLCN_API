@@ -65,7 +65,7 @@ public class UsersController : ControllerBase
         return Ok(ApiResponse<UserDetailResponse>.Ok(result, "Tạo khách hàng thành công."));
     }
 
-    ///// <summary>Cập nhật thông tin user — Admin và Staff.</summary>
+    /// <summary>Cập nhật thông tin user — Admin và Staff.</summary>
     [HttpPut("{userId:int}")]
     [AuthorizeRoles(RoleEnum.Admin, RoleEnum.Staff)]
     [ProducesResponseType(typeof(ApiResponse<UserDetailResponse>), 200)]
